@@ -87,7 +87,7 @@ const initialMessagesConfig: MensajeConfig[] = [
   { id: 1, min: -1000, max: 50, mensaje: "🚨 CRÍTICO: ¡Acción inmediata!", color: "text-red-400", bg: "bg-red-900/50", bar: "bg-red-500" },
   { id: 2, min: 50, max: 80, mensaje: "⚠️ ALERTA: Vamos lento.", color: "text-yellow-400", bg: "bg-yellow-900/50", bar: "bg-yellow-500" },
   { id: 3, min: 80, max: 99, mensaje: "🔵 BUEN RITMO: ¡Casi llegamos!", color: "text-blue-400", bg: "bg-blue-900/50", bar: "bg-blue-500" },
-  { id: 4, min: 99, max: 2000, mensaje: "✅ ÉXITO: ¡Meta cumplida!", color: "text-white", bg: "bg-green-500", bar: "bg-green-300" } 
+  { id: 4, min: 99, max: 5000, mensaje: "✅ ÉXITO: ¡Buen Trabajo!", color: "text-white", bg: "bg-green-500", bar: "bg-green-300" } 
 ];
 
 const WhatsAppIcon = () => (
@@ -148,19 +148,27 @@ export default function DashboardApp() {
 
   const evaluarCasino = (casino: Casino) => {
     const registro = registros[casino.id] || { utilidad: 0, fecha: null, locked: false, alertaCero: false };
-    const porcentajeReal = (registro.utilidad / casino.metaUtilidad) * 100;
+    
+    // Lo que debería llevar hoy exactamente
     const promedioEsperado = getPromedioEsperado(casino.metaUtilidad);
     
-    // Buscamos el mensaje adecuado. El mínimo ahora soporta negativos.
-    const config = messagesConfig.find(m => porcentajeReal >= m.min && porcentajeReal < m.max) || messagesConfig[0];
+    // PORCENTAJE DEL MES: Sirve SÓLO para llenar visualmente la barrita de progreso
+    const porcentajeMensual = casino.metaUtilidad > 0 ? (registro.utilidad / casino.metaUtilidad) * 100 : 0;
     
-    // Si cumple la meta, forzamos color verde vibrante
-    const isExitoso = porcentajeReal >= 100;
+    // RENDIMIENTO DIARIO: Compara lo real vs lo que debería llevar hoy. ¡Esto dicta el color y la salud!
+    const rendimientoDiario = promedioEsperado > 0 ? (registro.utilidad / promedioEsperado) * 100 : 0;
+    
+    // Buscamos el mensaje según su rendimiento de hoy
+    const config = messagesConfig.find(m => rendimientoDiario >= m.min && rendimientoDiario < m.max) || messagesConfig[0];
+    
+    // Si su rendimiento hoy es 100% o mayor, está exitoso.
+    const isExitoso = rendimientoDiario >= 100;
 
     return {
       ...casino,
       registro,
-      porcentajeReal,
+      porcentajeMensual,     // Para pintar el ancho de la barra
+      rendimientoDiario,     // Nueva métrica clave
       promedioEsperado,
       promedioDia: getPromedioDia(casino.metaUtilidad),
       faltante: casino.metaUtilidad - registro.utilidad,
@@ -168,7 +176,7 @@ export default function DashboardApp() {
       color: config.color,
       bg: isExitoso ? 'bg-green-600' : config.bg,
       barColor: config.bar,
-      icono: porcentajeReal < 50 ? <TrendingDown /> : isExitoso ? <CheckCircle /> : <TrendingUp />
+      icono: rendimientoDiario < 50 ? <TrendingDown /> : isExitoso ? <CheckCircle /> : <TrendingUp />
     };
   };
 
@@ -203,7 +211,6 @@ export default function DashboardApp() {
     
     const value = parseFloat(rawValue);
     
-    // Validación: Solo evitamos valores que no sean números. Los negativos ahora pasan.
     if (isNaN(value)) {
       return alert("Error: Ingresa un número válido. Se permiten números negativos usando el signo '-'.");
     }
@@ -250,7 +257,6 @@ export default function DashboardApp() {
       return c;
     }));
 
-    // Si el administrador cambia las metas, se resetea el acumulado
     if (field === 'metaMensual' || field === 'metaUtilidad') {
       setRegistros(prev => ({
         ...prev,
@@ -264,10 +270,12 @@ export default function DashboardApp() {
     }
   };
 
+  // Ajustado para filtrar basándose en rendimientoDiario
   const casinosFiltrados = casinos.filter(c => {
     if (filtroAdmin === 'TODOS') return true;
-    if (filtroAdmin === 'CRITICOS') return evaluarCasino(c).porcentajeReal < 50;
-    if (filtroAdmin === 'EXITOSOS') return evaluarCasino(c).porcentajeReal >= 100;
+    const evalC = evaluarCasino(c);
+    if (filtroAdmin === 'CRITICOS') return evalC.rendimientoDiario < 50;
+    if (filtroAdmin === 'EXITOSOS') return evalC.rendimientoDiario >= 100;
     return c.categoria === filtroAdmin;
   });
 
@@ -281,10 +289,10 @@ export default function DashboardApp() {
   }, { metaVentas: 0, metaUtilidad: 0, utilidadReal: 0 });
 
   const exportarCSV = () => {
-    let csv = "Local,Meta Ventas,Meta Utilidad,Utilidad Real,% Cumplimiento,Fecha Cierre\n";
+    let csv = "Local,Meta Ventas,Meta Utilidad,Utilidad Real,Avance Mensual %,Rendimiento Diario %,Fecha Cierre\n";
     casinosFiltrados.forEach(c => {
       const data = evaluarCasino(c);
-      csv += `${data.nombre},${data.metaMensual},${data.metaUtilidad},${data.registro.utilidad},${data.porcentajeReal.toFixed(2)}%,${data.registro.fecha || 'N/A'}\n`;
+      csv += `${data.nombre},${data.metaMensual},${data.metaUtilidad},${data.registro.utilidad},${data.porcentajeMensual.toFixed(2)}%,${data.rendimientoDiario.toFixed(2)}%,${data.registro.fecha || 'N/A'}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -573,8 +581,8 @@ export default function DashboardApp() {
                       {formatoPesos(data.registro.utilidad)}
                     </span>
                   </div>
-                  {/* Destello sutil si llegaron a la meta */}
-                  {data.porcentajeReal >= 100 && (
+                  {/* Destello sutil si llegaron a la meta del dia */}
+                  {data.rendimientoDiario >= 100 && (
                     <div className="absolute inset-0 bg-emerald-500/10 animate-pulse pointer-events-none"></div>
                   )}
                 </div>
@@ -591,7 +599,8 @@ export default function DashboardApp() {
                   </div>
                   <div className="h-2 bg-gray-700 rounded-full relative">
                     <div className="absolute top-1/2 transform -translate-y-1/2 w-1 h-4 bg-blue-500 z-10" style={{ left: `${(diaActual/30)*100}%` }}></div>
-                    <div className={`h-full rounded-full transition-all duration-700 ${data.barColor}`} style={{ width: `${Math.max(0, Math.min(data.porcentajeReal, 100))}%` }}></div>
+                    {/* El ancho de la barra indica el progreso total del mes */}
+                    <div className={`h-full rounded-full transition-all duration-700 ${data.barColor}`} style={{ width: `${Math.max(0, Math.min(data.porcentajeMensual, 100))}%` }}></div>
                   </div>
                 </div>
 
@@ -602,7 +611,6 @@ export default function DashboardApp() {
                 <div className="pt-2 border-t border-gray-700 bg-gray-800/50 p-3 rounded-lg mt-2">
                   <label className="text-xs text-gray-400 block mb-2 font-semibold">Añadir Utilidad de Hoy:</label>
                   <div className="flex gap-2">
-                    {/* Al input ya no se le limita con min="0" para que permita negativos */}
                     <input
                       type="number" placeholder="$ (puedes usar negativo)"
                       className="flex-1 bg-gray-900 text-white text-sm px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-emerald-500"
