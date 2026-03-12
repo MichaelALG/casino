@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { 
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, 
   Download, User, Shield, Settings, Calendar, 
-  Lock, Sigma, KeyRound
+  Sigma, KeyRound, LogOut
 } from 'lucide-react';
 
 // --- INTERFACES DE TYPESCRIPT ---
@@ -16,6 +16,7 @@ interface Casino {
   dia: string;
   metaMensual: number;
   metaUtilidad: number;
+  pin: string;
 }
 
 interface Registro {
@@ -36,48 +37,48 @@ interface MensajeConfig {
 
 // --- DATOS REALES ---
 const initialCasinosData: Casino[] = [
-  { id: 1, nombre: "CARTAGO", categoria: "GAMBLING", dia: "LUN", metaMensual: 645000000, metaUtilidad: 159000000 },
-  { id: 2, nombre: "RULETA CARTAGO", categoria: "GAMBLING", dia: "LUN", metaMensual: 135000000, metaUtilidad: 30000000 },
-  { id: 3, nombre: "ANSERMA", categoria: "GAMBLING", dia: "LUN", metaMensual: 420000000, metaUtilidad: 120000000 },
-  { id: 4, nombre: "QUIMBAYA", categoria: "GAMBLING", dia: "LUN", metaMensual: 966000000, metaUtilidad: 258000000 },
-  { id: 5, nombre: "RULETA QUIMBAYA", categoria: "GAMBLING", dia: "LUN", metaMensual: 240000000, metaUtilidad: 36000000 },
-  { id: 6, nombre: "LA VIRGINIA", categoria: "GAMBLING", dia: "MAR", metaMensual: 795000000, metaUtilidad: 210000000 },
-  { id: 7, nombre: "ROA", categoria: "GAMBLING", dia: "MAR", metaMensual: 330000000, metaUtilidad: 111000000 },
-  { id: 8, nombre: "LA 29", categoria: "GAMBLING", dia: "MIER", metaMensual: 534000000, metaUtilidad: 126000000 },
-  { id: 9, nombre: "IRRA", categoria: "SOCIEDADES", dia: "LUN", metaMensual: 279000000, metaUtilidad: 78000000 },
-  { id: 10, nombre: "ARAUCA", categoria: "SOCIEDADES", dia: "LUN", metaMensual: 264000000, metaUtilidad: 78000000 },
-  { id: 11, nombre: "CALLE 8 VITERBO", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 420000000, metaUtilidad: 105000000 },
-  { id: 12, nombre: "VITERBO", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 705000000, metaUtilidad: 168000000 },
-  { id: 13, nombre: "RULETA VITERBO", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 540000000, metaUtilidad: 108000000 },
-  { id: 14, nombre: "BELALCAZAR", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 255000000, metaUtilidad: 78000000 },
-  { id: 15, nombre: "RULETA BELALCAZAR", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 84000000, metaUtilidad: 21000000 },
-  { id: 16, nombre: "CUBA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 324000000, metaUtilidad: 81000000 },
-  { id: 17, nombre: "RULETA CUBA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 114000000, metaUtilidad: 30000000 },
-  { id: 18, nombre: "MARSELLA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 276000000, metaUtilidad: 72000000 },
-  { id: 19, nombre: "RULETA MARSELLA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 120000000, metaUtilidad: 30000000 },
+  { id: 1, nombre: "CARTAGO", categoria: "GAMBLING", dia: "LUN", metaMensual: 645000000, metaUtilidad: 159000000, pin: "1001" },
+  { id: 2, nombre: "RULETA CARTAGO", categoria: "GAMBLING", dia: "LUN", metaMensual: 135000000, metaUtilidad: 30000000, pin: "1002" },
+  { id: 3, nombre: "ANSERMA", categoria: "GAMBLING", dia: "LUN", metaMensual: 420000000, metaUtilidad: 120000000, pin: "1003" },
+  { id: 4, nombre: "QUIMBAYA", categoria: "GAMBLING", dia: "LUN", metaMensual: 966000000, metaUtilidad: 258000000, pin: "1004" },
+  { id: 5, nombre: "RULETA QUIMBAYA", categoria: "GAMBLING", dia: "LUN", metaMensual: 240000000, metaUtilidad: 36000000, pin: "1005" },
+  { id: 6, nombre: "LA VIRGINIA", categoria: "GAMBLING", dia: "MAR", metaMensual: 795000000, metaUtilidad: 210000000, pin: "1006" },
+  { id: 7, nombre: "ROA", categoria: "GAMBLING", dia: "MAR", metaMensual: 330000000, metaUtilidad: 111000000, pin: "1007" },
+  { id: 8, nombre: "LA 29", categoria: "GAMBLING", dia: "MIER", metaMensual: 534000000, metaUtilidad: 126000000, pin: "1008" },
+  { id: 9, nombre: "IRRA", categoria: "SOCIEDADES", dia: "LUN", metaMensual: 279000000, metaUtilidad: 78000000, pin: "1009" },
+  { id: 10, nombre: "ARAUCA", categoria: "SOCIEDADES", dia: "LUN", metaMensual: 264000000, metaUtilidad: 78000000, pin: "1010" },
+  { id: 11, nombre: "CALLE 8 VITERBO", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 420000000, metaUtilidad: 105000000, pin: "1011" },
+  { id: 12, nombre: "VITERBO", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 705000000, metaUtilidad: 168000000, pin: "1012" },
+  { id: 13, nombre: "RULETA VITERBO", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 540000000, metaUtilidad: 108000000, pin: "1013" },
+  { id: 14, nombre: "BELALCAZAR", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 255000000, metaUtilidad: 78000000, pin: "1014" },
+  { id: 15, nombre: "RULETA BELALCAZAR", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 84000000, metaUtilidad: 21000000, pin: "1015" },
+  { id: 16, nombre: "CUBA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 324000000, metaUtilidad: 81000000, pin: "1016" },
+  { id: 17, nombre: "RULETA CUBA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 114000000, metaUtilidad: 30000000, pin: "1017" },
+  { id: 18, nombre: "MARSELLA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 276000000, metaUtilidad: 72000000, pin: "1018" },
+  { id: 19, nombre: "RULETA MARSELLA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 120000000, metaUtilidad: 30000000, pin: "1019" },
 ];
 
 const generateRealData = (): Record<number, Registro> => {
   return {
-    1: { utilidad: 53000000, fecha: "Mar 10, 17:00", locked: true },
-    2: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: true },
-    3: { utilidad: 40000000, fecha: "Mar 10, 17:00", locked: true },
-    4: { utilidad: 86000000, fecha: "Mar 10, 17:00", locked: true },
-    5: { utilidad: 12000000, fecha: "Mar 10, 17:00", locked: true },
-    6: { utilidad: 70000000, fecha: "Mar 10, 17:00", locked: true },
-    7: { utilidad: 37000000, fecha: "Mar 10, 17:00", locked: true },
-    8: { utilidad: 42000000, fecha: "Mar 10, 17:00", locked: true },
-    9: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: true },
-    10: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: true },
-    11: { utilidad: 35000000, fecha: "Mar 10, 17:00", locked: true },
-    12: { utilidad: 56000000, fecha: "Mar 10, 17:00", locked: true },
-    13: { utilidad: 36000000, fecha: "Mar 10, 17:00", locked: true },
-    14: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: true },
-    15: { utilidad: 7000000, fecha: "Mar 10, 17:00", locked: true },
-    16: { utilidad: 27000000, fecha: "Mar 10, 17:00", locked: true },
-    17: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: true },
-    18: { utilidad: 24000000, fecha: "Mar 10, 17:00", locked: true },
-    19: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: true },
+    1: { utilidad: 53000000, fecha: "Mar 10, 17:00", locked: false },
+    2: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: false },
+    3: { utilidad: 40000000, fecha: "Mar 10, 17:00", locked: false },
+    4: { utilidad: 86000000, fecha: "Mar 10, 17:00", locked: false },
+    5: { utilidad: 12000000, fecha: "Mar 10, 17:00", locked: false },
+    6: { utilidad: 70000000, fecha: "Mar 10, 17:00", locked: false },
+    7: { utilidad: 37000000, fecha: "Mar 10, 17:00", locked: false },
+    8: { utilidad: 42000000, fecha: "Mar 10, 17:00", locked: false },
+    9: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: false },
+    10: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: false },
+    11: { utilidad: 35000000, fecha: "Mar 10, 17:00", locked: false },
+    12: { utilidad: 56000000, fecha: "Mar 10, 17:00", locked: false },
+    13: { utilidad: 36000000, fecha: "Mar 10, 17:00", locked: false },
+    14: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: false },
+    15: { utilidad: 7000000, fecha: "Mar 10, 17:00", locked: false },
+    16: { utilidad: 27000000, fecha: "Mar 10, 17:00", locked: false },
+    17: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: false },
+    18: { utilidad: 24000000, fecha: "Mar 10, 17:00", locked: false },
+    19: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: false },
   };
 };
 
@@ -99,7 +100,6 @@ export default function DashboardApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState('');
   
-  // Función helper con tipos explícitos para evitar error de Next.js
   const getInitialState = (key: string, defaultValue: any) => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(key);
@@ -108,14 +108,13 @@ export default function DashboardApp() {
     return defaultValue;
   };
 
-  // Estados inicializados con valores por defecto para evitar errores de hidratación
   const [systemPin, setSystemPin] = useState('2026');
   const [casinos, setCasinos] = useState<Casino[]>(initialCasinosData);
   const [registros, setRegistros] = useState<Record<number, Registro>>(generateRealData());
   const [messagesConfig, setMessagesConfig] = useState<MensajeConfig[]>(initialMessagesConfig);
   
-  const [userRole, setUserRole] = useState('admin');
-  const [selectedCasinoId, setSelectedCasinoId] = useState(1);
+  const [userRole, setUserRole] = useState<'admin' | 'user'>('admin');
+  const [selectedCasinoId, setSelectedCasinoId] = useState<number | null>(null);
   const [inputs, setInputs] = useState<Record<number, { utilidad: string }>>({}); 
   const [diaActual, setDiaActual] = useState(10);
   const [filtroAdmin, setFiltroAdmin] = useState('TODOS');
@@ -124,7 +123,6 @@ export default function DashboardApp() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [activeInputId, setActiveInputId] = useState<number | null>(null);
 
-  // Cargar datos del localStorage solo en el cliente una vez montado
   useEffect(() => {
     setIsMounted(true);
     setSystemPin(getInitialState('system_pin', '2026'));
@@ -133,7 +131,6 @@ export default function DashboardApp() {
     setMessagesConfig(getInitialState('casinos_msgs', initialMessagesConfig));
   }, []);
 
-  // Guardar en localStorage cuando cambian los datos
   useEffect(() => {
     if (isMounted) {
       localStorage.setItem('casinos_data', JSON.stringify(casinos));
@@ -171,41 +168,77 @@ export default function DashboardApp() {
   };
 
   const handleLogin = () => {
-    if (pinInput === systemPin) setIsAuthenticated(true);
-    else { alert("PIN Incorrecto"); setPinInput(''); }
+    if (pinInput === systemPin) {
+      setUserRole('admin');
+      setSelectedCasinoId(null);
+      setIsAuthenticated(true);
+    } else {
+      const casinoEncontrado = casinos.find(c => c.pin === pinInput);
+      if (casinoEncontrado) {
+        setUserRole('user');
+        setSelectedCasinoId(casinoEncontrado.id);
+        setIsAuthenticated(true);
+      } else {
+        alert("PIN Incorrecto");
+        setPinInput('');
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setPinInput('');
+    setUserRole('admin');
+    setSelectedCasinoId(null);
   };
 
   const openConfirmation = (id: number) => {
-    // Se asegura de que no lance error si el input es undefined
     const value = parseFloat(inputs[id]?.utilidad || '0');
-    if (!value || isNaN(value)) return alert("Ingresa un número válido.");
+    if (!value || isNaN(value)) return alert("Ingresa un número válido para sumar.");
     setActiveInputId(id);
     setShowConfirmModal(true);
   };
 
+  // --- NUEVA LÓGICA DE ACUMULACIÓN ---
   const confirmEntry = () => {
     if (!activeInputId) return;
-    const value = parseFloat(inputs[activeInputId]?.utilidad || '0');
+    
+    // Obtenemos el nuevo valor a sumar
+    const valueToAdd = parseFloat(inputs[activeInputId]?.utilidad || '0');
+    
+    // Obtenemos la fecha y hora actual exacta
     const now = new Date();
     const fechaStr = now.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-    setRegistros(prev => ({
+    setRegistros(prev => {
+      // Tomamos la utilidad que ya tenía acumulada (o 0 si es la primera vez)
+      const utilidadAnterior = prev[activeInputId]?.utilidad || 0;
+      
+      return {
         ...prev,
         [activeInputId]: {
-          utilidad: value,
+          utilidad: utilidadAnterior + valueToAdd, // AQUÍ SE HACE LA SUMA AL ACUMULADO
           fecha: fechaStr,
-          locked: true 
+          locked: false // Lo dejamos abierto para que mañana puedan volver a sumar
         }
-    }));
+      };
+    });
     
     setInputs(prev => ({ ...prev, [activeInputId]: { utilidad: '' } }));
     setShowConfirmModal(false);
     setActiveInputId(null);
   };
 
-  // El campo está estrictamente tipado como clave de Casino
   const updateCasinoMeta = (id: number, field: keyof Casino, value: string) => {
-    setCasinos(prev => prev.map(c => c.id === id ? { ...c, [field]: parseFloat(value) || 0 } : c));
+    setCasinos(prev => prev.map(c => {
+      if (c.id === id) {
+        if (field === 'pin' || field === 'nombre' || field === 'categoria' || field === 'dia') {
+          return { ...c, [field]: value };
+        }
+        return { ...c, [field]: parseFloat(value) || 0 };
+      }
+      return c;
+    }));
   };
 
   const casinosFiltrados = casinos.filter(c => {
@@ -237,7 +270,7 @@ export default function DashboardApp() {
     link.click();
   };
   
-  if (!isMounted) return null; // Evita el error de hidratación renderizando null hasta que cargue en el cliente
+  if (!isMounted) return null;
 
   if (!isAuthenticated) {
     return (
@@ -246,7 +279,7 @@ export default function DashboardApp() {
         <div className="z-10 text-center mb-8">
           <Shield className="w-16 h-16 mx-auto text-emerald-400 mb-4" />
           <h1 className="text-3xl font-bold">Casino Control</h1>
-          <p className="text-gray-500 mt-2">Ingrese PIN de seguridad</p>
+          <p className="text-gray-500 mt-2">Ingrese PIN de seguridad o PIN de local</p>
         </div>
         <div className="z-10 bg-gray-900 p-8 rounded-xl shadow-2xl border border-gray-800 w-11/12 max-w-sm">
           <div className="flex justify-center gap-2 mb-6">
@@ -276,11 +309,13 @@ export default function DashboardApp() {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-600 shadow-2xl w-11/12 max-w-sm text-center">
             <AlertTriangle className="mx-auto text-yellow-400 mb-4" size={40} />
-            <h3 className="text-xl font-bold mb-2">¿Estás seguro?</h3>
-            <p className="text-gray-400 text-sm mb-4">El valor de utilidad ingresado es <span className="text-white font-bold">{formatoPesos(parseFloat(inputs[activeInputId!]?.utilidad || '0'))}</span>. Una vez aceptado, no podrás modificarlo.</p>
+            <h3 className="text-xl font-bold mb-2">Confirmar Abono</h3>
+            <p className="text-gray-400 text-sm mb-4">
+              Se sumarán <span className="text-white font-bold text-lg">{formatoPesos(parseFloat(inputs[activeInputId!]?.utilidad || '0'))}</span> a tu utilidad acumulada.
+            </p>
             <div className="flex gap-4 mt-6">
               <button onClick={() => setShowConfirmModal(false)} className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded font-bold">Cancelar</button>
-              <button onClick={confirmEntry} className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-bold">Aceptar</button>
+              <button onClick={confirmEntry} className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-bold">Sumar</button>
             </div>
           </div>
         </div>
@@ -296,20 +331,20 @@ export default function DashboardApp() {
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
-          <div className="flex items-center gap-1 bg-gray-800 p-1 rounded-lg">
-            <button onClick={() => setUserRole('admin')} className={`px-3 py-1 rounded text-sm flex items-center gap-1 ${userRole === 'admin' ? 'bg-emerald-600 text-white' : 'text-gray-400'}`}><Shield size={14}/> Admin</button>
-            <button onClick={() => setUserRole('user')} className={`px-3 py-1 rounded text-sm flex items-center gap-1 ${userRole === 'user' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}><User size={14}/> Usuario</button>
+          
+          <div className="flex items-center gap-3 bg-gray-800 p-2 rounded-lg border border-gray-700">
+            {userRole === 'admin' ? (
+              <span className="text-emerald-400 flex items-center gap-1 text-sm font-bold"><Shield size={16}/> MODO ADMIN</span>
+            ) : (
+              <span className="text-blue-400 flex items-center gap-1 text-sm font-bold">
+                <User size={16}/> {casinos.find(c => c.id === selectedCasinoId)?.nombre}
+              </span>
+            )}
+            <div className="w-px h-4 bg-gray-600"></div>
+            <button onClick={handleLogout} className="text-gray-400 hover:text-red-400 flex items-center gap-1 text-xs transition-colors">
+              <LogOut size={14} /> Salir
+            </button>
           </div>
-
-          {userRole === 'user' && (
-            <select 
-              className="bg-gray-800 border border-gray-600 text-white px-3 py-1 rounded text-sm"
-              value={selectedCasinoId}
-              onChange={(e) => setSelectedCasinoId(Number(e.target.value))}
-            >
-              {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </select>
-          )}
 
           <div className="flex items-center gap-2 text-xs bg-gray-800 p-2 rounded border border-gray-700">
             <Calendar size={14} className="text-gray-400"/>
@@ -358,13 +393,20 @@ export default function DashboardApp() {
             <div className="mb-6 bg-gray-800 p-6 rounded-xl border border-emerald-500/50 shadow-lg">
               <div className="grid md:grid-cols-3 gap-8">
                 <div>
-                  <h3 className="text-lg font-bold mb-4 border-b border-gray-700 pb-2 flex items-center gap-2"><Sigma size={18}/> Configurar Metas</h3>
+                  <h3 className="text-lg font-bold mb-4 border-b border-gray-700 pb-2 flex items-center gap-2"><Sigma size={18}/> Configurar Metas y PINs</h3>
                   <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
                     {casinos.map(c => (
                       <div key={c.id} onClick={() => setConfigTarget(c.id)} className={`p-2 rounded cursor-pointer ${configTarget === c.id ? 'bg-emerald-900/50 border border-emerald-500' : 'bg-gray-700 hover:bg-gray-600'}`}>
-                        <p className="font-semibold text-sm">{c.nombre}</p>
+                        <div className="flex justify-between items-center">
+                          <p className="font-semibold text-sm">{c.nombre}</p>
+                          <span className="text-xs bg-gray-900 px-2 py-1 rounded text-gray-400 border border-gray-600">PIN: {c.pin}</span>
+                        </div>
                         {configTarget === c.id && (
-                          <div className="grid grid-cols-2 gap-2 mt-2" onClick={e => e.stopPropagation()}>
+                          <div className="grid grid-cols-2 gap-2 mt-3" onClick={e => e.stopPropagation()}>
+                            <div className="col-span-2">
+                              <label className="text-xs text-gray-400">PIN de Acceso Local (4 dígitos)</label>
+                              <input type="text" maxLength={4} value={c.pin} onChange={e => updateCasinoMeta(c.id, 'pin', e.target.value.replace(/\D/g, ''))} className="w-full bg-gray-900 p-1 rounded text-sm text-emerald-400 font-bold tracking-widest text-center" />
+                            </div>
                             <div>
                               <label className="text-xs text-gray-400">Meta Ventas</label>
                               <input type="number" value={c.metaMensual} onChange={e => updateCasinoMeta(c.id, 'metaMensual', e.target.value)} className="w-full bg-gray-900 p-1 rounded text-sm text-white" />
@@ -403,10 +445,10 @@ export default function DashboardApp() {
                 </div>
 
                 <div>
-                   <h3 className="text-lg font-bold mb-4 border-b border-gray-700 pb-2 flex items-center gap-2"><KeyRound size={18}/> Seguridad</h3>
+                   <h3 className="text-lg font-bold mb-4 border-b border-gray-700 pb-2 flex items-center gap-2"><KeyRound size={18}/> Seguridad Master</h3>
                    <div className="space-y-4">
-                      <div className="bg-gray-700 p-3 rounded">
-                        <label className="text-xs text-gray-400 block mb-1">Cambiar PIN de Acceso</label>
+                      <div className="bg-gray-700 p-3 rounded border border-emerald-500/30">
+                        <label className="text-xs text-gray-400 block mb-1">Cambiar PIN Administrador</label>
                         <input 
                           type="password" 
                           value={systemPin} 
@@ -426,7 +468,6 @@ export default function DashboardApp() {
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {(userRole === 'admin' ? casinosFiltrados : casinos.filter(c => c.id === selectedCasinoId)).map(casino => {
           const data = evaluarCasino(casino);
-          const isLocked = data.registro.locked;
           
           return (
             <div key={data.id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-lg flex flex-col">
@@ -439,7 +480,6 @@ export default function DashboardApp() {
 
                 <div className="flex justify-between items-start ml-10">
                   <span className="text-xs font-semibold text-white/80 uppercase ml-2">{data.categoria}</span>
-                  {isLocked && <Lock size={14} className="text-white/80" />}
                 </div>
                 <h2 className="text-xl font-bold text-white text-center my-1 drop-shadow-md">{data.nombre}</h2>
                 <div className="text-center mt-2">
@@ -451,7 +491,7 @@ export default function DashboardApp() {
               <div className="p-5 flex-grow space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-gray-400">Último Cierre</p>
+                    <p className="text-gray-400">Último Abono</p>
                     <p className="font-bold text-white text-xs">{data.registro.fecha || "Sin registro"}</p>
                   </div>
                   <div className="text-right">
@@ -460,14 +500,14 @@ export default function DashboardApp() {
                   </div>
                 </div>
 
-                <div className="bg-gray-900 p-3 rounded-lg">
+                <div className="bg-gray-900 p-3 rounded-lg border border-gray-700">
                   <div className="flex justify-between mb-2">
                     <span className="text-gray-400 text-sm">Utilidad Meta</span>
                     <span className="font-bold text-white">{formatoPesos(data.metaUtilidad)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400 text-sm">Utilidad Real Acum.</span>
-                    <span className="font-bold text-emerald-400">{formatoPesos(data.registro.utilidad)}</span>
+                  <div className="flex justify-between border-t border-gray-800 pt-2">
+                    <span className="text-gray-400 text-sm font-semibold">Total Acumulado</span>
+                    <span className="font-bold text-emerald-400 text-lg">{formatoPesos(data.registro.utilidad)}</span>
                   </div>
                 </div>
 
@@ -491,21 +531,22 @@ export default function DashboardApp() {
                   <p className={`text-sm font-medium ${data.color}`}>{data.mensaje}</p>
                 </div>
 
-                <div className="pt-2 border-t border-gray-700">
-                  <label className="text-xs text-gray-500 block mb-1">Registrar Utilidad:</label>
+                <div className="pt-2 border-t border-gray-700 bg-gray-800/50 p-3 rounded-lg mt-2">
+                  <label className="text-xs text-gray-400 block mb-2 font-semibold">Añadir Utilidad de Hoy:</label>
                   <div className="flex gap-2">
                     <input
-                      type="number" placeholder="$"
-                      className="flex-1 bg-gray-700 text-white text-sm px-2 py-1 rounded border border-gray-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                      type="number" placeholder="$ Valor a sumar"
+                      className="flex-1 bg-gray-900 text-white text-sm px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-emerald-500"
                       value={inputs[data.id]?.utilidad || ''}
                       onChange={(e) => setInputs((prev) => ({ ...prev, [data.id]: { utilidad: e.target.value } }))}
-                      disabled={isLocked && userRole === 'user'}
                     />
                     <button 
                       onClick={() => openConfirmation(data.id)} 
-                      disabled={(isLocked && userRole === 'user') || !inputs[data.id]?.utilidad}
-                      className="bg-emerald-600 hover:bg-emerald-500 px-3 py-1 rounded text-xs font-bold disabled:opacity-30"
-                    > OK </button>
+                      disabled={!inputs[data.id]?.utilidad}
+                      className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-sm font-bold disabled:opacity-30 flex items-center gap-1"
+                    > 
+                      Sumar
+                    </button>
                   </div>
                 </div>
               </div>
