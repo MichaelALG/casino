@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @next/next/no-img-element */
 
 import { useState, useEffect } from 'react';
 import { 
@@ -98,6 +99,15 @@ export default function DashboardApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState('');
   
+  // Función helper con tipos explícitos para evitar error de Next.js
+  const getInitialState = (key: string, defaultValue: any) => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(key);
+      if (saved) return JSON.parse(saved);
+    }
+    return defaultValue;
+  };
+
   // Estados inicializados con valores por defecto para evitar errores de hidratación
   const [systemPin, setSystemPin] = useState('2026');
   const [casinos, setCasinos] = useState<Casino[]>(initialCasinosData);
@@ -117,17 +127,10 @@ export default function DashboardApp() {
   // Cargar datos del localStorage solo en el cliente una vez montado
   useEffect(() => {
     setIsMounted(true);
-    const savedPin = localStorage.getItem('system_pin');
-    if (savedPin) setSystemPin(JSON.parse(savedPin));
-
-    const savedCasinos = localStorage.getItem('casinos_data');
-    if (savedCasinos) setCasinos(JSON.parse(savedCasinos));
-
-    const savedRegistros = localStorage.getItem('casinos_registros');
-    if (savedRegistros) setRegistros(JSON.parse(savedRegistros));
-
-    const savedMsgs = localStorage.getItem('casinos_msgs');
-    if (savedMsgs) setMessagesConfig(JSON.parse(savedMsgs));
+    setSystemPin(getInitialState('system_pin', '2026'));
+    setCasinos(getInitialState('casinos_data', initialCasinosData));
+    setRegistros(getInitialState('casinos_registros', generateRealData()));
+    setMessagesConfig(getInitialState('casinos_msgs', initialMessagesConfig));
   }, []);
 
   // Guardar en localStorage cuando cambian los datos
@@ -173,7 +176,8 @@ export default function DashboardApp() {
   };
 
   const openConfirmation = (id: number) => {
-    const value = parseFloat(inputs[id]?.utilidad);
+    // Se asegura de que no lance error si el input es undefined
+    const value = parseFloat(inputs[id]?.utilidad || '0');
     if (!value || isNaN(value)) return alert("Ingresa un número válido.");
     setActiveInputId(id);
     setShowConfirmModal(true);
@@ -181,7 +185,7 @@ export default function DashboardApp() {
 
   const confirmEntry = () => {
     if (!activeInputId) return;
-    const value = parseFloat(inputs[activeInputId]?.utilidad);
+    const value = parseFloat(inputs[activeInputId]?.utilidad || '0');
     const now = new Date();
     const fechaStr = now.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -199,7 +203,8 @@ export default function DashboardApp() {
     setActiveInputId(null);
   };
 
-  const updateCasinoMeta = (id: number, field: string, value: string) => {
+  // El campo está estrictamente tipado como clave de Casino
+  const updateCasinoMeta = (id: number, field: keyof Casino, value: string) => {
     setCasinos(prev => prev.map(c => c.id === id ? { ...c, [field]: parseFloat(value) || 0 } : c));
   };
 
@@ -272,7 +277,7 @@ export default function DashboardApp() {
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-600 shadow-2xl w-11/12 max-w-sm text-center">
             <AlertTriangle className="mx-auto text-yellow-400 mb-4" size={40} />
             <h3 className="text-xl font-bold mb-2">¿Estás seguro?</h3>
-            <p className="text-gray-400 text-sm mb-4">El valor de utilidad ingresado es <span className="text-white font-bold">{formatoPesos(parseFloat(inputs[activeInputId!]?.utilidad))}</span>. Una vez aceptado, no podrás modificarlo.</p>
+            <p className="text-gray-400 text-sm mb-4">El valor de utilidad ingresado es <span className="text-white font-bold">{formatoPesos(parseFloat(inputs[activeInputId!]?.utilidad || '0'))}</span>. Una vez aceptado, no podrás modificarlo.</p>
             <div className="flex gap-4 mt-6">
               <button onClick={() => setShowConfirmModal(false)} className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded font-bold">Cancelar</button>
               <button onClick={confirmEntry} className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-bold">Aceptar</button>
