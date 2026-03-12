@@ -70,7 +70,7 @@ const WhatsAppIcon = () => (
 );
 
 export default function DashboardApp() {
-  const getInitialState = (key, defaultValue) => {
+  const getInitialState = (key: string, defaultValue: any) => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(key);
       if (saved) return JSON.parse(saved);
