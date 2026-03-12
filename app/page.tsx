@@ -7,8 +7,34 @@ import {
   Lock, Sigma, KeyRound
 } from 'lucide-react';
 
+// --- INTERFACES DE TYPESCRIPT ---
+interface Casino {
+  id: number;
+  nombre: string;
+  categoria: string;
+  dia: string;
+  metaMensual: number;
+  metaUtilidad: number;
+}
+
+interface Registro {
+  utilidad: number;
+  fecha: string | null;
+  locked: boolean;
+}
+
+interface MensajeConfig {
+  id: number;
+  min: number;
+  max: number;
+  mensaje: string;
+  color: string;
+  bg: string;
+  bar: string;
+}
+
 // --- DATOS REALES ---
-const initialCasinosData = [
+const initialCasinosData: Casino[] = [
   { id: 1, nombre: "CARTAGO", categoria: "GAMBLING", dia: "LUN", metaMensual: 645000000, metaUtilidad: 159000000 },
   { id: 2, nombre: "RULETA CARTAGO", categoria: "GAMBLING", dia: "LUN", metaMensual: 135000000, metaUtilidad: 30000000 },
   { id: 3, nombre: "ANSERMA", categoria: "GAMBLING", dia: "LUN", metaMensual: 420000000, metaUtilidad: 120000000 },
@@ -30,7 +56,7 @@ const initialCasinosData = [
   { id: 19, nombre: "RULETA MARSELLA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 120000000, metaUtilidad: 30000000 },
 ];
 
-const generateRealData = () => {
+const generateRealData = (): Record<number, Registro> => {
   return {
     1: { utilidad: 53000000, fecha: "Mar 10, 17:00", locked: true },
     2: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: true },
@@ -54,8 +80,7 @@ const generateRealData = () => {
   };
 };
 
-// Configuración de colores
-const initialMessagesConfig = [
+const initialMessagesConfig: MensajeConfig[] = [
   { id: 1, min: 0, max: 50, mensaje: "🚨 CRÍTICO: ¡Acción inmediata!", color: "text-red-400", bg: "bg-red-900/50", bar: "bg-red-500" },
   { id: 2, min: 50, max: 80, mensaje: "⚠️ ALERTA: Vamos lento.", color: "text-yellow-400", bg: "bg-yellow-900/50", bar: "bg-yellow-500" },
   { id: 3, min: 80, max: 99, mensaje: "🔵 BUEN RITMO: ¡Casi llegamos!", color: "text-blue-400", bg: "bg-blue-900/50", bar: "bg-blue-500" },
@@ -69,31 +94,19 @@ const WhatsAppIcon = () => (
 );
 
 export default function DashboardApp() {
-  // --- CORRECCIÓN DE TYPESCRIPT AQUÍ ABAJO ---
-  const getInitialState = (key: string, defaultValue: any) => { 
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(key);
-      if (saved) return JSON.parse(saved);
-    }
-    return defaultValue;
-  };
-
+  const [isMounted, setIsMounted] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState('');
-  const [systemPin, setSystemPin] = useState(() => getInitialState('system_pin', '2026'));
   
-  const [casinos, setCasinos] = useState(() => getInitialState('casinos_data', initialCasinosData));
-  const [registros, setRegistros] = useState(() => {
-    const saved = localStorage.getItem('casinos_registros');
-    if (saved) return JSON.parse(saved);
-    return generateRealData();
-  });
-  
-  const [messagesConfig, setMessagesConfig] = useState(() => getInitialState('casinos_msgs', initialMessagesConfig));
+  // Estados inicializados con valores por defecto para evitar errores de hidratación
+  const [systemPin, setSystemPin] = useState('2026');
+  const [casinos, setCasinos] = useState<Casino[]>(initialCasinosData);
+  const [registros, setRegistros] = useState<Record<number, Registro>>(generateRealData());
+  const [messagesConfig, setMessagesConfig] = useState<MensajeConfig[]>(initialMessagesConfig);
   
   const [userRole, setUserRole] = useState('admin');
   const [selectedCasinoId, setSelectedCasinoId] = useState(1);
-  const [inputs, setInputs] = useState<any>({}); 
+  const [inputs, setInputs] = useState<Record<number, { utilidad: string }>>({}); 
   const [diaActual, setDiaActual] = useState(10);
   const [filtroAdmin, setFiltroAdmin] = useState('TODOS');
   const [showConfig, setShowConfig] = useState(false);
@@ -101,17 +114,38 @@ export default function DashboardApp() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [activeInputId, setActiveInputId] = useState<number | null>(null);
 
-  useEffect(() => { localStorage.setItem('casinos_data', JSON.stringify(casinos)); }, [casinos]);
-  useEffect(() => { localStorage.setItem('casinos_registros', JSON.stringify(registros)); }, [registros]);
-  useEffect(() => { localStorage.setItem('casinos_msgs', JSON.stringify(messagesConfig)); }, [messagesConfig]);
-  useEffect(() => { localStorage.setItem('system_pin', JSON.stringify(systemPin)); }, [systemPin]);
+  // Cargar datos del localStorage solo en el cliente una vez montado
+  useEffect(() => {
+    setIsMounted(true);
+    const savedPin = localStorage.getItem('system_pin');
+    if (savedPin) setSystemPin(JSON.parse(savedPin));
+
+    const savedCasinos = localStorage.getItem('casinos_data');
+    if (savedCasinos) setCasinos(JSON.parse(savedCasinos));
+
+    const savedRegistros = localStorage.getItem('casinos_registros');
+    if (savedRegistros) setRegistros(JSON.parse(savedRegistros));
+
+    const savedMsgs = localStorage.getItem('casinos_msgs');
+    if (savedMsgs) setMessagesConfig(JSON.parse(savedMsgs));
+  }, []);
+
+  // Guardar en localStorage cuando cambian los datos
+  useEffect(() => {
+    if (isMounted) {
+      localStorage.setItem('casinos_data', JSON.stringify(casinos));
+      localStorage.setItem('casinos_registros', JSON.stringify(registros));
+      localStorage.setItem('casinos_msgs', JSON.stringify(messagesConfig));
+      localStorage.setItem('system_pin', JSON.stringify(systemPin));
+    }
+  }, [casinos, registros, messagesConfig, systemPin, isMounted]);
 
   const formatoPesos = (val: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(val);
   
   const getPromedioEsperado = (meta: number) => (meta / 30) * diaActual;
   const getPromedioDia = (meta: number) => meta / 30;
 
-  const evaluarCasino = (casino: any) => {
+  const evaluarCasino = (casino: Casino) => {
     const registro = registros[casino.id] || { utilidad: 0, fecha: null, locked: false };
     const porcentajeReal = (registro.utilidad / casino.metaUtilidad) * 100;
     const promedioEsperado = getPromedioEsperado(casino.metaUtilidad);
@@ -160,7 +194,7 @@ export default function DashboardApp() {
         }
     }));
     
-    setInputs(prev => ({ ...prev, [activeInputId!]: { utilidad: '' } }));
+    setInputs(prev => ({ ...prev, [activeInputId]: { utilidad: '' } }));
     setShowConfirmModal(false);
     setActiveInputId(null);
   };
@@ -198,6 +232,8 @@ export default function DashboardApp() {
     link.click();
   };
   
+  if (!isMounted) return null; // Evita el error de hidratación renderizando null hasta que cargue en el cliente
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center text-white relative overflow-hidden">
@@ -389,7 +425,6 @@ export default function DashboardApp() {
           
           return (
             <div key={data.id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-lg flex flex-col">
-              {/* Header Dinámico */}
               <div className={`p-4 ${data.bg} border-b border-gray-700 relative transition-colors duration-500`}>
                 <img 
                   src="https://z-cdn-media.chatglm.cn/files/9a8f0b6a-4eb0-4355-958e-f0eba195dc97.png?auth_key=1873295030-16af9abaa2f147b5b6f8ada3e9491b35-0-ce3104328fea8a435aa665bd9b5b7482" 
@@ -443,7 +478,6 @@ export default function DashboardApp() {
                   </div>
                   <div className="h-2 bg-gray-700 rounded-full relative">
                     <div className="absolute top-1/2 transform -translate-y-1/2 w-1 h-4 bg-blue-500 z-10" style={{ left: `${(diaActual/30)*100}%` }}></div>
-                    {/* Barra de progreso dinámica */}
                     <div className={`h-full rounded-full transition-all duration-700 ${data.barColor}`} style={{ width: `${Math.min(data.porcentajeReal, 100)}%` }}></div>
                   </div>
                 </div>
@@ -452,7 +486,6 @@ export default function DashboardApp() {
                   <p className={`text-sm font-medium ${data.color}`}>{data.mensaje}</p>
                 </div>
 
-                {/* Input solo de Utilidad */}
                 <div className="pt-2 border-t border-gray-700">
                   <label className="text-xs text-gray-500 block mb-1">Registrar Utilidad:</label>
                   <div className="flex gap-2">
@@ -460,7 +493,7 @@ export default function DashboardApp() {
                       type="number" placeholder="$"
                       className="flex-1 bg-gray-700 text-white text-sm px-2 py-1 rounded border border-gray-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                       value={inputs[data.id]?.utilidad || ''}
-                      onChange={(e) => setInputs((prev: any) => ({ ...prev, [data.id]: { utilidad: e.target.value } }))}
+                      onChange={(e) => setInputs((prev) => ({ ...prev, [data.id]: { utilidad: e.target.value } }))}
                       disabled={isLocked && userRole === 'user'}
                     />
                     <button 
@@ -476,7 +509,6 @@ export default function DashboardApp() {
         })}
       </div>
 
-      {/* Footer */}
       <footer className="fixed bottom-0 left-0 right-0 bg-gray-950 border-t border-gray-800 p-3 text-center text-xs text-gray-500 z-40">
         <div className="flex flex-col md:flex-row justify-center items-center gap-2">
           <span className="font-bold text-gray-400">Integración Tecnológica Avanzada ITA</span>
