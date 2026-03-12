@@ -23,7 +23,7 @@ interface Registro {
   utilidad: number;
   fecha: string | null;
   locked: boolean;
-  alertaCero?: boolean; // <-- NUEVO: Para marcar cuando ingresan $0
+  alertaCero?: boolean;
 }
 
 interface MensajeConfig {
@@ -84,10 +84,10 @@ const generateRealData = (): Record<number, Registro> => {
 };
 
 const initialMessagesConfig: MensajeConfig[] = [
-  { id: 1, min: 0, max: 50, mensaje: "🚨 CRÍTICO: ¡Acción inmediata!", color: "text-red-400", bg: "bg-red-900/50", bar: "bg-red-500" },
+  { id: 1, min: -1000, max: 50, mensaje: "🚨 CRÍTICO: ¡Acción inmediata!", color: "text-red-400", bg: "bg-red-900/50", bar: "bg-red-500" },
   { id: 2, min: 50, max: 80, mensaje: "⚠️ ALERTA: Vamos lento.", color: "text-yellow-400", bg: "bg-yellow-900/50", bar: "bg-yellow-500" },
   { id: 3, min: 80, max: 99, mensaje: "🔵 BUEN RITMO: ¡Casi llegamos!", color: "text-blue-400", bg: "bg-blue-900/50", bar: "bg-blue-500" },
-  { id: 4, min: 99, max: 1000, mensaje: "✅ ÉXITO: ¡Meta cumplida!", color: "text-white", bg: "bg-green-500", bar: "bg-green-300" } 
+  { id: 4, min: 99, max: 2000, mensaje: "✅ ÉXITO: ¡Meta cumplida!", color: "text-white", bg: "bg-green-500", bar: "bg-green-300" } 
 ];
 
 const WhatsAppIcon = () => (
@@ -151,6 +151,7 @@ export default function DashboardApp() {
     const porcentajeReal = (registro.utilidad / casino.metaUtilidad) * 100;
     const promedioEsperado = getPromedioEsperado(casino.metaUtilidad);
     
+    // Buscamos el mensaje adecuado. El mínimo ahora soporta negativos.
     const config = messagesConfig.find(m => porcentajeReal >= m.min && porcentajeReal < m.max) || messagesConfig[0];
     
     // Si cumple la meta, forzamos color verde vibrante
@@ -165,7 +166,7 @@ export default function DashboardApp() {
       faltante: casino.metaUtilidad - registro.utilidad,
       mensaje: config.mensaje,
       color: config.color,
-      bg: isExitoso ? 'bg-green-600' : config.bg, // Forzamos verde en la cabecera si cumplió
+      bg: isExitoso ? 'bg-green-600' : config.bg,
       barColor: config.bar,
       icono: porcentajeReal < 50 ? <TrendingDown /> : isExitoso ? <CheckCircle /> : <TrendingUp />
     };
@@ -202,9 +203,9 @@ export default function DashboardApp() {
     
     const value = parseFloat(rawValue);
     
-    // Validación de números negativos o inválidos
-    if (isNaN(value) || value < 0) {
-      return alert("Error: No puedes ingresar números negativos ni letras. Ingresa un valor válido.");
+    // Validación: Solo evitamos valores que no sean números. Los negativos ahora pasan.
+    if (isNaN(value)) {
+      return alert("Error: Ingresa un número válido. Se permiten números negativos usando el signo '-'.");
     }
 
     setActiveInputId(id);
@@ -220,7 +221,7 @@ export default function DashboardApp() {
 
     setRegistros(prev => {
       const utilidadAnterior = prev[activeInputId]?.utilidad || 0;
-      const esCero = valueToAdd === 0; // Se activa la alarma si abona exactamente $0
+      const esCero = valueToAdd === 0;
       
       return {
         ...prev,
@@ -228,7 +229,7 @@ export default function DashboardApp() {
           utilidad: utilidadAnterior + valueToAdd,
           fecha: fechaStr,
           locked: false, 
-          alertaCero: esCero // Guardamos el estado de alerta
+          alertaCero: esCero
         }
       };
     });
@@ -238,7 +239,6 @@ export default function DashboardApp() {
     setActiveInputId(null);
   };
 
-  // Función actualizada: Si cambia una meta, resetea la utilidad a cero.
   const updateCasinoMeta = (id: number, field: keyof Casino, value: string) => {
     setCasinos(prev => prev.map(c => {
       if (c.id === id) {
@@ -250,7 +250,7 @@ export default function DashboardApp() {
       return c;
     }));
 
-    // Si el administrador cambia las metas de Ventas o Utilidad, se resetea el acumulado
+    // Si el administrador cambia las metas, se resetea el acumulado
     if (field === 'metaMensual' || field === 'metaUtilidad') {
       setRegistros(prev => ({
         ...prev,
@@ -325,9 +325,9 @@ export default function DashboardApp() {
     );
   }
 
-  // --- VARIABLES PARA EL MODAL DE CONFIRMACIÓN ---
-  const valorAbonoModal = activeInputId ? parseFloat(inputs[activeInputId]?.utilidad) : 0;
+  const valorAbonoModal = activeInputId ? parseFloat(inputs[activeInputId]?.utilidad || '0') : 0;
   const esCeroModal = valorAbonoModal === 0;
+  const esNegativoModal = valorAbonoModal < 0;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white pb-20 p-4 md:p-8">
@@ -337,16 +337,24 @@ export default function DashboardApp() {
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-600 shadow-2xl w-11/12 max-w-sm text-center">
             {esCeroModal ? (
               <AlertOctagon className="mx-auto text-red-500 mb-4 animate-pulse" size={48} />
+            ) : esNegativoModal ? (
+              <TrendingDown className="mx-auto text-orange-400 mb-4" size={40} />
             ) : (
               <AlertTriangle className="mx-auto text-yellow-400 mb-4" size={40} />
             )}
             
-            <h3 className="text-xl font-bold mb-2">Confirmar Abono</h3>
+            <h3 className="text-xl font-bold mb-2">
+              {esNegativoModal ? 'Confirmar Pérdida' : 'Confirmar Abono'}
+            </h3>
             
             {esCeroModal ? (
               <p className="text-red-400 text-sm mb-4 font-bold border border-red-500/50 bg-red-900/20 p-3 rounded">
                 ⚠️ ATENCIÓN: Vas a registrar un valor de $0. Esto generará una alerta de revisión para el administrador.
               </p>
+            ) : esNegativoModal ? (
+               <p className="text-orange-300 text-sm mb-4">
+                 Se <span className="font-bold text-white">restarán {formatoPesos(Math.abs(valorAbonoModal))}</span> de tu utilidad acumulada.
+               </p>
             ) : (
               <p className="text-gray-400 text-sm mb-4">
                 Se sumarán <span className="text-white font-bold text-lg">{formatoPesos(valorAbonoModal)}</span> a tu utilidad acumulada.
@@ -355,8 +363,8 @@ export default function DashboardApp() {
             
             <div className="flex gap-4 mt-6">
               <button onClick={() => setShowConfirmModal(false)} className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded font-bold">Cancelar</button>
-              <button onClick={confirmEntry} className={`flex-1 px-4 py-2 rounded font-bold ${esCeroModal ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
-                {esCeroModal ? 'Sí, Enviar $0' : 'Sumar'}
+              <button onClick={confirmEntry} className={`flex-1 px-4 py-2 rounded font-bold ${esCeroModal ? 'bg-red-600 hover:bg-red-500' : esNegativoModal ? 'bg-orange-600 hover:bg-orange-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
+                {esCeroModal ? 'Sí, Enviar $0' : esNegativoModal ? 'Registrar Pérdida' : 'Sumar'}
               </button>
             </div>
           </div>
@@ -408,7 +416,9 @@ export default function DashboardApp() {
             </div>
             <div className="text-center">
               <p className="text-xs text-gray-400 uppercase">Utilidad Real Acumulada</p>
-              <p className="text-2xl font-bold text-emerald-400">{formatoPesos(totales.utilidadReal)}</p>
+              <p className={`text-2xl font-bold ${totales.utilidadReal < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                {formatoPesos(totales.utilidadReal)}
+              </p>
             </div>
           </div>
 
@@ -543,7 +553,7 @@ export default function DashboardApp() {
               <div className="p-5 flex-grow space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-gray-400">Último Abono</p>
+                    <p className="text-gray-400">Último Movimiento</p>
                     <p className="font-bold text-white text-xs">{data.registro.fecha || "Sin registro"}</p>
                   </div>
                   <div className="text-right">
@@ -559,7 +569,9 @@ export default function DashboardApp() {
                   </div>
                   <div className="flex justify-between border-t border-gray-800 pt-2">
                     <span className="text-gray-400 text-sm font-semibold">Total Acumulado</span>
-                    <span className="font-bold text-emerald-400 text-lg">{formatoPesos(data.registro.utilidad)}</span>
+                    <span className={`font-bold text-lg ${data.registro.utilidad < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {formatoPesos(data.registro.utilidad)}
+                    </span>
                   </div>
                   {/* Destello sutil si llegaron a la meta */}
                   {data.porcentajeReal >= 100 && (
@@ -579,4 +591,53 @@ export default function DashboardApp() {
                   </div>
                   <div className="h-2 bg-gray-700 rounded-full relative">
                     <div className="absolute top-1/2 transform -translate-y-1/2 w-1 h-4 bg-blue-500 z-10" style={{ left: `${(diaActual/30)*100}%` }}></div>
-                    <div className={`h-full rounded-full transition-all duration-700 ${data.barColor}`} style={{ width: `${Math.
+                    <div className={`h-full rounded-full transition-all duration-700 ${data.barColor}`} style={{ width: `${Math.max(0, Math.min(data.porcentajeReal, 100))}%` }}></div>
+                  </div>
+                </div>
+
+                <div className={`p-3 rounded border border-gray-600 ${data.bg} transition-colors duration-500`}>
+                  <p className={`text-sm font-medium ${data.color}`}>{data.mensaje}</p>
+                </div>
+
+                <div className="pt-2 border-t border-gray-700 bg-gray-800/50 p-3 rounded-lg mt-2">
+                  <label className="text-xs text-gray-400 block mb-2 font-semibold">Añadir Utilidad de Hoy:</label>
+                  <div className="flex gap-2">
+                    {/* Al input ya no se le limita con min="0" para que permita negativos */}
+                    <input
+                      type="number" placeholder="$ (puedes usar negativo)"
+                      className="flex-1 bg-gray-900 text-white text-sm px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-emerald-500"
+                      value={inputs[data.id]?.utilidad || ''}
+                      onChange={(e) => setInputs((prev) => ({ ...prev, [data.id]: { utilidad: e.target.value } }))}
+                    />
+                    <button 
+                      onClick={() => openConfirmation(data.id)} 
+                      disabled={inputs[data.id]?.utilidad === '' || inputs[data.id]?.utilidad === undefined}
+                      className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-sm font-bold disabled:opacity-30 flex items-center gap-1 transition-all"
+                    > 
+                      Sumar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <footer className="fixed bottom-0 left-0 right-0 bg-gray-950 border-t border-gray-800 p-3 text-center text-xs text-gray-500 z-40">
+        <div className="flex flex-col md:flex-row justify-center items-center gap-2">
+          <span className="font-bold text-gray-400">Integración Tecnológica Avanzada ITA</span>
+          <span className="hidden md:inline">|</span>
+          <span>División Software - Automatización - AI</span>
+          <span className="hidden md:inline">|</span>
+          <span>2026 Pereira Colombia</span>
+          <span className="hidden md:inline">|</span>
+          <div className="flex items-center gap-1">
+            <WhatsAppIcon />
+            <span>3146539014</span>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
