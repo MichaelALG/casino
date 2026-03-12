@@ -54,12 +54,11 @@ const generateRealData = () => {
   };
 };
 
-// Configuración de colores: Barra y Fondo
+// Configuración de colores
 const initialMessagesConfig = [
   { id: 1, min: 0, max: 50, mensaje: "🚨 CRÍTICO: ¡Acción inmediata!", color: "text-red-400", bg: "bg-red-900/50", bar: "bg-red-500" },
   { id: 2, min: 50, max: 80, mensaje: "⚠️ ALERTA: Vamos lento.", color: "text-yellow-400", bg: "bg-yellow-900/50", bar: "bg-yellow-500" },
   { id: 3, min: 80, max: 99, mensaje: "🔵 BUEN RITMO: ¡Casi llegamos!", color: "text-blue-400", bg: "bg-blue-900/50", bar: "bg-blue-500" },
-  // ÉXITO: Fondo Verde Sólido y Barra Verde Claro
   { id: 4, min: 99, max: 1000, mensaje: "✅ ÉXITO: ¡Meta cumplida!", color: "text-white", bg: "bg-green-500", bar: "bg-green-300" } 
 ];
 
@@ -70,7 +69,8 @@ const WhatsAppIcon = () => (
 );
 
 export default function DashboardApp() {
-  const getInitialState = (key: string, defaultValue: any) => {
+  // --- CORRECCIÓN DE TYPESCRIPT AQUÍ ABAJO ---
+  const getInitialState = (key: string, defaultValue: any) => { 
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(key);
       if (saved) return JSON.parse(saved);
@@ -93,25 +93,25 @@ export default function DashboardApp() {
   
   const [userRole, setUserRole] = useState('admin');
   const [selectedCasinoId, setSelectedCasinoId] = useState(1);
-  const [inputs, setInputs] = useState({}); 
+  const [inputs, setInputs] = useState<any>({}); 
   const [diaActual, setDiaActual] = useState(10);
   const [filtroAdmin, setFiltroAdmin] = useState('TODOS');
   const [showConfig, setShowConfig] = useState(false);
-  const [configTarget, setConfigTarget] = useState(null); 
+  const [configTarget, setConfigTarget] = useState<number | null>(null); 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [activeInputId, setActiveInputId] = useState(null);
+  const [activeInputId, setActiveInputId] = useState<number | null>(null);
 
   useEffect(() => { localStorage.setItem('casinos_data', JSON.stringify(casinos)); }, [casinos]);
   useEffect(() => { localStorage.setItem('casinos_registros', JSON.stringify(registros)); }, [registros]);
   useEffect(() => { localStorage.setItem('casinos_msgs', JSON.stringify(messagesConfig)); }, [messagesConfig]);
   useEffect(() => { localStorage.setItem('system_pin', JSON.stringify(systemPin)); }, [systemPin]);
 
-  const formatoPesos = (val) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(val);
+  const formatoPesos = (val: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(val);
   
-  const getPromedioEsperado = (meta) => (meta / 30) * diaActual;
-  const getPromedioDia = (meta) => meta / 30;
+  const getPromedioEsperado = (meta: number) => (meta / 30) * diaActual;
+  const getPromedioDia = (meta: number) => meta / 30;
 
-  const evaluarCasino = (casino) => {
+  const evaluarCasino = (casino: any) => {
     const registro = registros[casino.id] || { utilidad: 0, fecha: null, locked: false };
     const porcentajeReal = (registro.utilidad / casino.metaUtilidad) * 100;
     const promedioEsperado = getPromedioEsperado(casino.metaUtilidad);
@@ -138,7 +138,7 @@ export default function DashboardApp() {
     else { alert("PIN Incorrecto"); setPinInput(''); }
   };
 
-  const openConfirmation = (id) => {
+  const openConfirmation = (id: number) => {
     const value = parseFloat(inputs[id]?.utilidad);
     if (!value || isNaN(value)) return alert("Ingresa un número válido.");
     setActiveInputId(id);
@@ -146,6 +146,7 @@ export default function DashboardApp() {
   };
 
   const confirmEntry = () => {
+    if (!activeInputId) return;
     const value = parseFloat(inputs[activeInputId]?.utilidad);
     const now = new Date();
     const fechaStr = now.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -159,12 +160,12 @@ export default function DashboardApp() {
         }
     }));
     
-    setInputs(prev => ({ ...prev, [activeInputId]: { utilidad: '' } }));
+    setInputs(prev => ({ ...prev, [activeInputId!]: { utilidad: '' } }));
     setShowConfirmModal(false);
     setActiveInputId(null);
   };
 
-  const updateCasinoMeta = (id, field, value) => {
+  const updateCasinoMeta = (id: number, field: string, value: string) => {
     setCasinos(prev => prev.map(c => c.id === id ? { ...c, [field]: parseFloat(value) || 0 } : c));
   };
 
@@ -235,7 +236,7 @@ export default function DashboardApp() {
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-600 shadow-2xl w-11/12 max-w-sm text-center">
             <AlertTriangle className="mx-auto text-yellow-400 mb-4" size={40} />
             <h3 className="text-xl font-bold mb-2">¿Estás seguro?</h3>
-            <p className="text-gray-400 text-sm mb-4">El valor de utilidad ingresado es <span className="text-white font-bold">{formatoPesos(parseFloat(inputs[activeInputId]?.utilidad))}</span>. Una vez aceptado, no podrás modificarlo.</p>
+            <p className="text-gray-400 text-sm mb-4">El valor de utilidad ingresado es <span className="text-white font-bold">{formatoPesos(parseFloat(inputs[activeInputId!]?.utilidad))}</span>. Una vez aceptado, no podrás modificarlo.</p>
             <div className="flex gap-4 mt-6">
               <button onClick={() => setShowConfirmModal(false)} className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded font-bold">Cancelar</button>
               <button onClick={confirmEntry} className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-bold">Aceptar</button>
@@ -459,7 +460,7 @@ export default function DashboardApp() {
                       type="number" placeholder="$"
                       className="flex-1 bg-gray-700 text-white text-sm px-2 py-1 rounded border border-gray-600 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                       value={inputs[data.id]?.utilidad || ''}
-                      onChange={(e) => setInputs(prev => ({ ...prev, [data.id]: { utilidad: e.target.value } }))}
+                      onChange={(e) => setInputs((prev: any) => ({ ...prev, [data.id]: { utilidad: e.target.value } }))}
                       disabled={isLocked && userRole === 'user'}
                     />
                     <button 
