@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { 
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, 
   Download, User, Shield, Settings, Calendar, 
-  Sigma, KeyRound, LogOut
+  Sigma, KeyRound, LogOut, AlertOctagon
 } from 'lucide-react';
 
 // --- INTERFACES DE TYPESCRIPT ---
@@ -23,6 +23,7 @@ interface Registro {
   utilidad: number;
   fecha: string | null;
   locked: boolean;
+  alertaCero?: boolean; // <-- NUEVO: Para marcar cuando ingresan $0
 }
 
 interface MensajeConfig {
@@ -60,25 +61,25 @@ const initialCasinosData: Casino[] = [
 
 const generateRealData = (): Record<number, Registro> => {
   return {
-    1: { utilidad: 53000000, fecha: "Mar 10, 17:00", locked: false },
-    2: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: false },
-    3: { utilidad: 40000000, fecha: "Mar 10, 17:00", locked: false },
-    4: { utilidad: 86000000, fecha: "Mar 10, 17:00", locked: false },
-    5: { utilidad: 12000000, fecha: "Mar 10, 17:00", locked: false },
-    6: { utilidad: 70000000, fecha: "Mar 10, 17:00", locked: false },
-    7: { utilidad: 37000000, fecha: "Mar 10, 17:00", locked: false },
-    8: { utilidad: 42000000, fecha: "Mar 10, 17:00", locked: false },
-    9: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: false },
-    10: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: false },
-    11: { utilidad: 35000000, fecha: "Mar 10, 17:00", locked: false },
-    12: { utilidad: 56000000, fecha: "Mar 10, 17:00", locked: false },
-    13: { utilidad: 36000000, fecha: "Mar 10, 17:00", locked: false },
-    14: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: false },
-    15: { utilidad: 7000000, fecha: "Mar 10, 17:00", locked: false },
-    16: { utilidad: 27000000, fecha: "Mar 10, 17:00", locked: false },
-    17: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: false },
-    18: { utilidad: 24000000, fecha: "Mar 10, 17:00", locked: false },
-    19: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: false },
+    1: { utilidad: 53000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    2: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    3: { utilidad: 40000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    4: { utilidad: 86000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    5: { utilidad: 12000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    6: { utilidad: 70000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    7: { utilidad: 37000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    8: { utilidad: 42000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    9: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    10: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    11: { utilidad: 35000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    12: { utilidad: 56000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    13: { utilidad: 36000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    14: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    15: { utilidad: 7000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    16: { utilidad: 27000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    17: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    18: { utilidad: 24000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
+    19: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
   };
 };
 
@@ -146,12 +147,15 @@ export default function DashboardApp() {
   const getPromedioDia = (meta: number) => meta / 30;
 
   const evaluarCasino = (casino: Casino) => {
-    const registro = registros[casino.id] || { utilidad: 0, fecha: null, locked: false };
+    const registro = registros[casino.id] || { utilidad: 0, fecha: null, locked: false, alertaCero: false };
     const porcentajeReal = (registro.utilidad / casino.metaUtilidad) * 100;
     const promedioEsperado = getPromedioEsperado(casino.metaUtilidad);
     
     const config = messagesConfig.find(m => porcentajeReal >= m.min && porcentajeReal < m.max) || messagesConfig[0];
     
+    // Si cumple la meta, forzamos color verde vibrante
+    const isExitoso = porcentajeReal >= 100;
+
     return {
       ...casino,
       registro,
@@ -161,9 +165,9 @@ export default function DashboardApp() {
       faltante: casino.metaUtilidad - registro.utilidad,
       mensaje: config.mensaje,
       color: config.color,
-      bg: config.bg,
+      bg: isExitoso ? 'bg-green-600' : config.bg, // Forzamos verde en la cabecera si cumplió
       barColor: config.bar,
-      icono: porcentajeReal < 50 ? <TrendingDown /> : porcentajeReal >= 100 ? <CheckCircle /> : <TrendingUp />
+      icono: porcentajeReal < 50 ? <TrendingDown /> : isExitoso ? <CheckCircle /> : <TrendingUp />
     };
   };
 
@@ -193,33 +197,38 @@ export default function DashboardApp() {
   };
 
   const openConfirmation = (id: number) => {
-    const value = parseFloat(inputs[id]?.utilidad || '0');
-    if (!value || isNaN(value)) return alert("Ingresa un número válido para sumar.");
+    const rawValue = inputs[id]?.utilidad;
+    if (rawValue === '' || rawValue === undefined) return alert("Por favor ingresa un valor.");
+    
+    const value = parseFloat(rawValue);
+    
+    // Validación de números negativos o inválidos
+    if (isNaN(value) || value < 0) {
+      return alert("Error: No puedes ingresar números negativos ni letras. Ingresa un valor válido.");
+    }
+
     setActiveInputId(id);
     setShowConfirmModal(true);
   };
 
-  // --- NUEVA LÓGICA DE ACUMULACIÓN ---
   const confirmEntry = () => {
     if (!activeInputId) return;
     
-    // Obtenemos el nuevo valor a sumar
-    const valueToAdd = parseFloat(inputs[activeInputId]?.utilidad || '0');
-    
-    // Obtenemos la fecha y hora actual exacta
+    const valueToAdd = parseFloat(inputs[activeInputId]?.utilidad);
     const now = new Date();
     const fechaStr = now.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
     setRegistros(prev => {
-      // Tomamos la utilidad que ya tenía acumulada (o 0 si es la primera vez)
       const utilidadAnterior = prev[activeInputId]?.utilidad || 0;
+      const esCero = valueToAdd === 0; // Se activa la alarma si abona exactamente $0
       
       return {
         ...prev,
         [activeInputId]: {
-          utilidad: utilidadAnterior + valueToAdd, // AQUÍ SE HACE LA SUMA AL ACUMULADO
+          utilidad: utilidadAnterior + valueToAdd,
           fecha: fechaStr,
-          locked: false // Lo dejamos abierto para que mañana puedan volver a sumar
+          locked: false, 
+          alertaCero: esCero // Guardamos el estado de alerta
         }
       };
     });
@@ -229,6 +238,7 @@ export default function DashboardApp() {
     setActiveInputId(null);
   };
 
+  // Función actualizada: Si cambia una meta, resetea la utilidad a cero.
   const updateCasinoMeta = (id: number, field: keyof Casino, value: string) => {
     setCasinos(prev => prev.map(c => {
       if (c.id === id) {
@@ -239,6 +249,19 @@ export default function DashboardApp() {
       }
       return c;
     }));
+
+    // Si el administrador cambia las metas de Ventas o Utilidad, se resetea el acumulado
+    if (field === 'metaMensual' || field === 'metaUtilidad') {
+      setRegistros(prev => ({
+        ...prev,
+        [id]: {
+          utilidad: 0,
+          fecha: new Date().toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
+          locked: false,
+          alertaCero: false
+        }
+      }));
+    }
   };
 
   const casinosFiltrados = casinos.filter(c => {
@@ -302,20 +325,39 @@ export default function DashboardApp() {
     );
   }
 
+  // --- VARIABLES PARA EL MODAL DE CONFIRMACIÓN ---
+  const valorAbonoModal = activeInputId ? parseFloat(inputs[activeInputId]?.utilidad) : 0;
+  const esCeroModal = valorAbonoModal === 0;
+
   return (
     <div className="min-h-screen bg-gray-900 text-white pb-20 p-4 md:p-8">
       
       {showConfirmModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-600 shadow-2xl w-11/12 max-w-sm text-center">
-            <AlertTriangle className="mx-auto text-yellow-400 mb-4" size={40} />
+            {esCeroModal ? (
+              <AlertOctagon className="mx-auto text-red-500 mb-4 animate-pulse" size={48} />
+            ) : (
+              <AlertTriangle className="mx-auto text-yellow-400 mb-4" size={40} />
+            )}
+            
             <h3 className="text-xl font-bold mb-2">Confirmar Abono</h3>
-            <p className="text-gray-400 text-sm mb-4">
-              Se sumarán <span className="text-white font-bold text-lg">{formatoPesos(parseFloat(inputs[activeInputId!]?.utilidad || '0'))}</span> a tu utilidad acumulada.
-            </p>
+            
+            {esCeroModal ? (
+              <p className="text-red-400 text-sm mb-4 font-bold border border-red-500/50 bg-red-900/20 p-3 rounded">
+                ⚠️ ATENCIÓN: Vas a registrar un valor de $0. Esto generará una alerta de revisión para el administrador.
+              </p>
+            ) : (
+              <p className="text-gray-400 text-sm mb-4">
+                Se sumarán <span className="text-white font-bold text-lg">{formatoPesos(valorAbonoModal)}</span> a tu utilidad acumulada.
+              </p>
+            )}
+            
             <div className="flex gap-4 mt-6">
               <button onClick={() => setShowConfirmModal(false)} className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded font-bold">Cancelar</button>
-              <button onClick={confirmEntry} className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-bold">Sumar</button>
+              <button onClick={confirmEntry} className={`flex-1 px-4 py-2 rounded font-bold ${esCeroModal ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
+                {esCeroModal ? 'Sí, Enviar $0' : 'Sumar'}
+              </button>
             </div>
           </div>
         </div>
@@ -331,7 +373,6 @@ export default function DashboardApp() {
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
-          
           <div className="flex items-center gap-3 bg-gray-800 p-2 rounded-lg border border-gray-700">
             {userRole === 'admin' ? (
               <span className="text-emerald-400 flex items-center gap-1 text-sm font-bold"><Shield size={16}/> MODO ADMIN</span>
@@ -349,7 +390,7 @@ export default function DashboardApp() {
           <div className="flex items-center gap-2 text-xs bg-gray-800 p-2 rounded border border-gray-700">
             <Calendar size={14} className="text-gray-400"/>
             <span>Día:</span>
-            <input type="number" value={diaActual} onChange={(e) => setDiaActual(Number(e.target.value))} className="w-8 bg-gray-700 text-center rounded text-white text-xs" />
+            <input type="number" min="1" max="31" value={diaActual} onChange={(e) => setDiaActual(Number(e.target.value))} className="w-10 bg-gray-700 text-center rounded text-white text-xs px-1" />
           </div>
         </div>
       </nav>
@@ -390,7 +431,10 @@ export default function DashboardApp() {
           </div>
 
           {showConfig && (
-            <div className="mb-6 bg-gray-800 p-6 rounded-xl border border-emerald-500/50 shadow-lg">
+            <div className="mb-6 bg-gray-800 p-6 rounded-xl border border-emerald-500/50 shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="bg-emerald-900/30 text-emerald-200 text-sm p-3 rounded mb-6 border border-emerald-500/30">
+                💡 <strong>Nota para Administrador:</strong> Si cambias el valor de <em>Meta Ventas</em> o <em>Meta Utilidad</em> de un local, su acumulado se reiniciará automáticamente a $0 para iniciar un nuevo ciclo.
+              </div>
               <div className="grid md:grid-cols-3 gap-8">
                 <div>
                   <h3 className="text-lg font-bold mb-4 border-b border-gray-700 pb-2 flex items-center gap-2"><Sigma size={18}/> Configurar Metas y PINs</h3>
@@ -470,7 +514,15 @@ export default function DashboardApp() {
           const data = evaluarCasino(casino);
           
           return (
-            <div key={data.id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-lg flex flex-col">
+            <div key={data.id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-lg flex flex-col relative">
+              
+              {/* ALERTA VISUAL PARA ADMIN SI INGRESARON $0 */}
+              {data.registro.alertaCero && userRole === 'admin' && (
+                <div className="bg-red-600 text-white text-xs text-center font-bold py-1 animate-pulse flex justify-center items-center gap-1">
+                  <AlertOctagon size={14} /> ALERTA: Último abono fue de $0. Revisar.
+                </div>
+              )}
+
               <div className={`p-4 ${data.bg} border-b border-gray-700 relative transition-colors duration-500`}>
                 <img 
                   src="https://z-cdn-media.chatglm.cn/files/9a8f0b6a-4eb0-4355-958e-f0eba195dc97.png?auth_key=1873295030-16af9abaa2f147b5b6f8ada3e9491b35-0-ce3104328fea8a435aa665bd9b5b7482" 
@@ -500,7 +552,7 @@ export default function DashboardApp() {
                   </div>
                 </div>
 
-                <div className="bg-gray-900 p-3 rounded-lg border border-gray-700">
+                <div className="bg-gray-900 p-3 rounded-lg border border-gray-700 relative overflow-hidden">
                   <div className="flex justify-between mb-2">
                     <span className="text-gray-400 text-sm">Utilidad Meta</span>
                     <span className="font-bold text-white">{formatoPesos(data.metaUtilidad)}</span>
@@ -509,6 +561,10 @@ export default function DashboardApp() {
                     <span className="text-gray-400 text-sm font-semibold">Total Acumulado</span>
                     <span className="font-bold text-emerald-400 text-lg">{formatoPesos(data.registro.utilidad)}</span>
                   </div>
+                  {/* Destello sutil si llegaron a la meta */}
+                  {data.porcentajeReal >= 100 && (
+                    <div className="absolute inset-0 bg-emerald-500/10 animate-pulse pointer-events-none"></div>
+                  )}
                 </div>
 
                 <div className="space-y-1">
@@ -523,52 +579,4 @@ export default function DashboardApp() {
                   </div>
                   <div className="h-2 bg-gray-700 rounded-full relative">
                     <div className="absolute top-1/2 transform -translate-y-1/2 w-1 h-4 bg-blue-500 z-10" style={{ left: `${(diaActual/30)*100}%` }}></div>
-                    <div className={`h-full rounded-full transition-all duration-700 ${data.barColor}`} style={{ width: `${Math.min(data.porcentajeReal, 100)}%` }}></div>
-                  </div>
-                </div>
-
-                <div className={`p-3 rounded border border-gray-600 ${data.bg} transition-colors duration-500`}>
-                  <p className={`text-sm font-medium ${data.color}`}>{data.mensaje}</p>
-                </div>
-
-                <div className="pt-2 border-t border-gray-700 bg-gray-800/50 p-3 rounded-lg mt-2">
-                  <label className="text-xs text-gray-400 block mb-2 font-semibold">Añadir Utilidad de Hoy:</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number" placeholder="$ Valor a sumar"
-                      className="flex-1 bg-gray-900 text-white text-sm px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-emerald-500"
-                      value={inputs[data.id]?.utilidad || ''}
-                      onChange={(e) => setInputs((prev) => ({ ...prev, [data.id]: { utilidad: e.target.value } }))}
-                    />
-                    <button 
-                      onClick={() => openConfirmation(data.id)} 
-                      disabled={!inputs[data.id]?.utilidad}
-                      className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-sm font-bold disabled:opacity-30 flex items-center gap-1"
-                    > 
-                      Sumar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <footer className="fixed bottom-0 left-0 right-0 bg-gray-950 border-t border-gray-800 p-3 text-center text-xs text-gray-500 z-40">
-        <div className="flex flex-col md:flex-row justify-center items-center gap-2">
-          <span className="font-bold text-gray-400">Integración Tecnológica Avanzada ITA</span>
-          <span className="hidden md:inline">|</span>
-          <span>División Software - Automatización - AI</span>
-          <span className="hidden md:inline">|</span>
-          <span>2026 Pereira Colombia</span>
-          <span className="hidden md:inline">|</span>
-          <div className="flex items-center gap-1">
-            <WhatsAppIcon />
-            <span>3146539014</span>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
-}
+                    <div className={`h-full rounded-full transition-all duration-700 ${data.barColor}`} style={{ width: `${Math.
