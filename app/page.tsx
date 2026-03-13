@@ -117,7 +117,7 @@ export default function DashboardApp() {
   const [userRole, setUserRole] = useState<'admin' | 'user'>('admin');
   const [selectedCasinoId, setSelectedCasinoId] = useState<number | null>(null);
   const [inputs, setInputs] = useState<Record<number, { utilidad: string }>>({}); 
-  const [diaActual, setDiaActual] = useState(10);
+  const [diaActual, setDiaActual] = useState(1); // Se actualiza en el useEffect
   const [filtroAdmin, setFiltroAdmin] = useState('TODOS');
   const [showConfig, setShowConfig] = useState(false);
   const [configTarget, setConfigTarget] = useState<number | null>(null); 
@@ -130,6 +130,10 @@ export default function DashboardApp() {
     setCasinos(getInitialState('casinos_data', initialCasinosData));
     setRegistros(getInitialState('casinos_registros', generateRealData()));
     setMessagesConfig(getInitialState('casinos_msgs', initialMessagesConfig));
+    
+    // --- NUEVO: Lee el día actual del calendario real
+    const today = new Date().getDate();
+    setDiaActual(today);
   }, []);
 
   useEffect(() => {
@@ -153,7 +157,6 @@ export default function DashboardApp() {
     const porcentajeMensual = casino.metaUtilidad > 0 ? (registro.utilidad / casino.metaUtilidad) * 100 : 0;
     const rendimientoDiario = promedioEsperado > 0 ? (registro.utilidad / promedioEsperado) * 100 : 0;
     
-    // El balance (diferencia) entre lo real y lo que debería llevar
     const balance = registro.utilidad - promedioEsperado;
     
     const config = messagesConfig.find(m => rendimientoDiario >= m.min && rendimientoDiario < m.max) || messagesConfig[0];
@@ -165,7 +168,7 @@ export default function DashboardApp() {
       porcentajeMensual,
       rendimientoDiario,
       promedioEsperado,
-      balance, // <-- Nuevo dato
+      balance,
       promedioDia: getPromedioDia(casino.metaUtilidad),
       faltante: casino.metaUtilidad - registro.utilidad,
       mensaje: config.mensaje,
@@ -332,7 +335,6 @@ export default function DashboardApp() {
   const esCeroModal = valorAbonoModal === 0;
   const esNegativoModal = valorAbonoModal < 0;
 
-  // Porcentaje del mes transcurrido (para las barras)
   const porcentajeTiempo = Math.round((diaActual / 30) * 100);
 
   return (
@@ -448,7 +450,6 @@ export default function DashboardApp() {
 
           {showConfig && (
             <div className="mb-6 bg-gray-800 p-6 rounded-xl border border-emerald-500/50 shadow-lg animate-in fade-in slide-in-from-top-4 duration-300 relative">
-              {/* BOTÓN PARA CERRAR EL PANEL DE CONFIGURACIÓN */}
               <button 
                 onClick={() => setShowConfig(false)} 
                 className="absolute top-4 right-4 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white flex items-center gap-1 px-3 py-1 rounded transition-colors"
@@ -592,7 +593,6 @@ export default function DashboardApp() {
                 </div>
 
                 <div className="space-y-1">
-                  {/* NUEVO: LÍNEA DE BALANCE Y ESPERADO */}
                   <div className="flex justify-between text-[11px] mb-1">
                     <span className="text-gray-400">
                       Deberías: <span className="font-bold text-yellow-300">{formatoPesos(data.promedioEsperado)}</span>
@@ -604,21 +604,24 @@ export default function DashboardApp() {
                     </span>
                   </div>
 
-                  {/* NUEVO: TEXTOS DE PORCENTAJES SOBRE LA BARRA */}
-                  <div className="flex justify-between text-[10px] font-bold text-gray-400 px-1 mt-3">
+                  <div className="text-[10px] font-bold text-gray-400 px-1 mt-4 mb-6">
                     <span className={data.porcentajeMensual >= porcentajeTiempo ? 'text-green-400' : 'text-white'}>
                       Real: {data.porcentajeMensual.toFixed(1)}%
                     </span>
-                    <span className="text-blue-400">Mes: {porcentajeTiempo}%</span>
                   </div>
 
                   <div className="h-2 bg-gray-700 rounded-full relative">
-                    <div className="absolute top-1/2 transform -translate-y-1/2 w-1 h-5 bg-blue-500 z-10" style={{ left: `${porcentajeTiempo}%` }}></div>
+                    <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
+                      <span className="text-blue-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-blue-500/30 whitespace-nowrap">
+                        Día {diaActual} ({porcentajeTiempo}%)
+                      </span>
+                      <div className="w-1 h-5 bg-blue-500 rounded"></div>
+                    </div>
                     <div className={`h-full rounded-full transition-all duration-700 ${data.barColor}`} style={{ width: `${Math.max(0, Math.min(data.porcentajeMensual, 100))}%` }}></div>
                   </div>
                 </div>
 
-                <div className={`p-3 rounded border border-gray-600 ${data.bg} transition-colors duration-500`}>
+                <div className={`p-3 rounded border border-gray-600 ${data.bg} transition-colors duration-500 mt-6`}>
                   <p className={`text-sm font-medium ${data.color}`}>{data.mensaje}</p>
                 </div>
 
