@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { 
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, 
   Download, User, Shield, Settings, Calendar, 
-  Sigma, KeyRound, LogOut, AlertOctagon
+  Sigma, KeyRound, LogOut, AlertOctagon, X
 } from 'lucide-react';
 
 // --- INTERFACES DE TYPESCRIPT ---
@@ -149,27 +149,23 @@ export default function DashboardApp() {
   const evaluarCasino = (casino: Casino) => {
     const registro = registros[casino.id] || { utilidad: 0, fecha: null, locked: false, alertaCero: false };
     
-    // Lo que debería llevar hoy exactamente
     const promedioEsperado = getPromedioEsperado(casino.metaUtilidad);
-    
-    // PORCENTAJE DEL MES: Sirve SÓLO para llenar visualmente la barrita de progreso
     const porcentajeMensual = casino.metaUtilidad > 0 ? (registro.utilidad / casino.metaUtilidad) * 100 : 0;
-    
-    // RENDIMIENTO DIARIO: Compara lo real vs lo que debería llevar hoy. ¡Esto dicta el color y la salud!
     const rendimientoDiario = promedioEsperado > 0 ? (registro.utilidad / promedioEsperado) * 100 : 0;
     
-    // Buscamos el mensaje según su rendimiento de hoy
-    const config = messagesConfig.find(m => rendimientoDiario >= m.min && rendimientoDiario < m.max) || messagesConfig[0];
+    // El balance (diferencia) entre lo real y lo que debería llevar
+    const balance = registro.utilidad - promedioEsperado;
     
-    // Si su rendimiento hoy es 100% o mayor, está exitoso.
+    const config = messagesConfig.find(m => rendimientoDiario >= m.min && rendimientoDiario < m.max) || messagesConfig[0];
     const isExitoso = rendimientoDiario >= 100;
 
     return {
       ...casino,
       registro,
-      porcentajeMensual,     // Para pintar el ancho de la barra
-      rendimientoDiario,     // Nueva métrica clave
+      porcentajeMensual,
+      rendimientoDiario,
       promedioEsperado,
+      balance, // <-- Nuevo dato
       promedioDia: getPromedioDia(casino.metaUtilidad),
       faltante: casino.metaUtilidad - registro.utilidad,
       mensaje: config.mensaje,
@@ -270,7 +266,6 @@ export default function DashboardApp() {
     }
   };
 
-  // Ajustado para filtrar basándose en rendimientoDiario
   const casinosFiltrados = casinos.filter(c => {
     if (filtroAdmin === 'TODOS') return true;
     const evalC = evaluarCasino(c);
@@ -336,6 +331,9 @@ export default function DashboardApp() {
   const valorAbonoModal = activeInputId ? parseFloat(inputs[activeInputId]?.utilidad || '0') : 0;
   const esCeroModal = valorAbonoModal === 0;
   const esNegativoModal = valorAbonoModal < 0;
+
+  // Porcentaje del mes transcurrido (para las barras)
+  const porcentajeTiempo = Math.round((diaActual / 30) * 100);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white pb-20 p-4 md:p-8">
@@ -449,8 +447,16 @@ export default function DashboardApp() {
           </div>
 
           {showConfig && (
-            <div className="mb-6 bg-gray-800 p-6 rounded-xl border border-emerald-500/50 shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
-              <div className="bg-emerald-900/30 text-emerald-200 text-sm p-3 rounded mb-6 border border-emerald-500/30">
+            <div className="mb-6 bg-gray-800 p-6 rounded-xl border border-emerald-500/50 shadow-lg animate-in fade-in slide-in-from-top-4 duration-300 relative">
+              {/* BOTÓN PARA CERRAR EL PANEL DE CONFIGURACIÓN */}
+              <button 
+                onClick={() => setShowConfig(false)} 
+                className="absolute top-4 right-4 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white flex items-center gap-1 px-3 py-1 rounded transition-colors"
+              >
+                <X size={16} /> Cerrar
+              </button>
+
+              <div className="bg-emerald-900/30 text-emerald-200 text-sm p-3 rounded mb-6 border border-emerald-500/30 mr-24">
                 💡 <strong>Nota para Administrador:</strong> Si cambias el valor de <em>Meta Ventas</em> o <em>Meta Utilidad</em> de un local, su acumulado se reiniciará automáticamente a $0 para iniciar un nuevo ciclo.
               </div>
               <div className="grid md:grid-cols-3 gap-8">
@@ -534,7 +540,6 @@ export default function DashboardApp() {
           return (
             <div key={data.id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-lg flex flex-col relative">
               
-              {/* ALERTA VISUAL PARA ADMIN SI INGRESARON $0 */}
               {data.registro.alertaCero && userRole === 'admin' && (
                 <div className="bg-red-600 text-white text-xs text-center font-bold py-1 animate-pulse flex justify-center items-center gap-1">
                   <AlertOctagon size={14} /> ALERTA: Último abono fue de $0. Revisar.
@@ -581,25 +586,34 @@ export default function DashboardApp() {
                       {formatoPesos(data.registro.utilidad)}
                     </span>
                   </div>
-                  {/* Destello sutil si llegaron a la meta del dia */}
                   {data.rendimientoDiario >= 100 && (
                     <div className="absolute inset-0 bg-emerald-500/10 animate-pulse pointer-events-none"></div>
                   )}
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-xs text-gray-400 text-center mb-2">
-                    Deberías llevar: <span className="font-bold text-yellow-300">{formatoPesos(data.promedioEsperado)}</span>
-                  </p>
-
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>Inicio</span>
-                    <span className="text-white font-bold">Día {diaActual}</span>
-                    <span>Fin</span>
+                  {/* NUEVO: LÍNEA DE BALANCE Y ESPERADO */}
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <span className="text-gray-400">
+                      Deberías: <span className="font-bold text-yellow-300">{formatoPesos(data.promedioEsperado)}</span>
+                    </span>
+                    <span className="text-gray-400">
+                      Balance: <span className={`font-bold ${data.balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {data.balance >= 0 ? '+' : ''}{formatoPesos(data.balance)}
+                      </span>
+                    </span>
                   </div>
+
+                  {/* NUEVO: TEXTOS DE PORCENTAJES SOBRE LA BARRA */}
+                  <div className="flex justify-between text-[10px] font-bold text-gray-400 px-1 mt-3">
+                    <span className={data.porcentajeMensual >= porcentajeTiempo ? 'text-green-400' : 'text-white'}>
+                      Real: {data.porcentajeMensual.toFixed(1)}%
+                    </span>
+                    <span className="text-blue-400">Mes: {porcentajeTiempo}%</span>
+                  </div>
+
                   <div className="h-2 bg-gray-700 rounded-full relative">
-                    <div className="absolute top-1/2 transform -translate-y-1/2 w-1 h-4 bg-blue-500 z-10" style={{ left: `${(diaActual/30)*100}%` }}></div>
-                    {/* El ancho de la barra indica el progreso total del mes */}
+                    <div className="absolute top-1/2 transform -translate-y-1/2 w-1 h-5 bg-blue-500 z-10" style={{ left: `${porcentajeTiempo}%` }}></div>
                     <div className={`h-full rounded-full transition-all duration-700 ${data.barColor}`} style={{ width: `${Math.max(0, Math.min(data.porcentajeMensual, 100))}%` }}></div>
                   </div>
                 </div>
