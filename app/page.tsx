@@ -2,11 +2,17 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { 
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, 
   Download, User, Shield, Settings, Calendar, 
-  Sigma, KeyRound, LogOut, AlertOctagon, X
+  Sigma, KeyRound, LogOut, AlertOctagon, X, Loader2
 } from 'lucide-react';
+
+// --- INICIALIZAR SUPABASE ---
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // --- INTERFACES DE TYPESCRIPT ---
 interface Casino {
@@ -17,13 +23,9 @@ interface Casino {
   metaMensual: number;
   metaUtilidad: number;
   pin: string;
-}
-
-interface Registro {
   utilidad: number;
   fecha: string | null;
-  locked: boolean;
-  alertaCero?: boolean;
+  alertaCero: boolean;
 }
 
 interface MensajeConfig {
@@ -35,53 +37,6 @@ interface MensajeConfig {
   bg: string;
   bar: string;
 }
-
-// --- DATOS REALES ---
-const initialCasinosData: Casino[] = [
-  { id: 1, nombre: "CARTAGO", categoria: "GAMBLING", dia: "LUN", metaMensual: 645000000, metaUtilidad: 159000000, pin: "1001" },
-  { id: 2, nombre: "RULETA CARTAGO", categoria: "GAMBLING", dia: "LUN", metaMensual: 135000000, metaUtilidad: 30000000, pin: "1002" },
-  { id: 3, nombre: "ANSERMA", categoria: "GAMBLING", dia: "LUN", metaMensual: 420000000, metaUtilidad: 120000000, pin: "1003" },
-  { id: 4, nombre: "QUIMBAYA", categoria: "GAMBLING", dia: "LUN", metaMensual: 966000000, metaUtilidad: 258000000, pin: "1004" },
-  { id: 5, nombre: "RULETA QUIMBAYA", categoria: "GAMBLING", dia: "LUN", metaMensual: 240000000, metaUtilidad: 36000000, pin: "1005" },
-  { id: 6, nombre: "LA VIRGINIA", categoria: "GAMBLING", dia: "MAR", metaMensual: 795000000, metaUtilidad: 210000000, pin: "1006" },
-  { id: 7, nombre: "ROA", categoria: "GAMBLING", dia: "MAR", metaMensual: 330000000, metaUtilidad: 111000000, pin: "1007" },
-  { id: 8, nombre: "LA 29", categoria: "GAMBLING", dia: "MIER", metaMensual: 534000000, metaUtilidad: 126000000, pin: "1008" },
-  { id: 9, nombre: "IRRA", categoria: "SOCIEDADES", dia: "LUN", metaMensual: 279000000, metaUtilidad: 78000000, pin: "1009" },
-  { id: 10, nombre: "ARAUCA", categoria: "SOCIEDADES", dia: "LUN", metaMensual: 264000000, metaUtilidad: 78000000, pin: "1010" },
-  { id: 11, nombre: "CALLE 8 VITERBO", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 420000000, metaUtilidad: 105000000, pin: "1011" },
-  { id: 12, nombre: "VITERBO", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 705000000, metaUtilidad: 168000000, pin: "1012" },
-  { id: 13, nombre: "RULETA VITERBO", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 540000000, metaUtilidad: 108000000, pin: "1013" },
-  { id: 14, nombre: "BELALCAZAR", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 255000000, metaUtilidad: 78000000, pin: "1014" },
-  { id: 15, nombre: "RULETA BELALCAZAR", categoria: "SOCIEDADES", dia: "MAR", metaMensual: 84000000, metaUtilidad: 21000000, pin: "1015" },
-  { id: 16, nombre: "CUBA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 324000000, metaUtilidad: 81000000, pin: "1016" },
-  { id: 17, nombre: "RULETA CUBA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 114000000, metaUtilidad: 30000000, pin: "1017" },
-  { id: 18, nombre: "MARSELLA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 276000000, metaUtilidad: 72000000, pin: "1018" },
-  { id: 19, nombre: "RULETA MARSELLA", categoria: "SOCIEDADES", dia: "MIER", metaMensual: 120000000, metaUtilidad: 30000000, pin: "1019" },
-];
-
-const generateRealData = (): Record<number, Registro> => {
-  return {
-    1: { utilidad: 53000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    2: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    3: { utilidad: 40000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    4: { utilidad: 86000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    5: { utilidad: 12000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    6: { utilidad: 70000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    7: { utilidad: 37000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    8: { utilidad: 42000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    9: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    10: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    11: { utilidad: 35000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    12: { utilidad: 56000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    13: { utilidad: 36000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    14: { utilidad: 26000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    15: { utilidad: 7000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    16: { utilidad: 27000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    17: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    18: { utilidad: 24000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-    19: { utilidad: 10000000, fecha: "Mar 10, 17:00", locked: false, alertaCero: false },
-  };
-};
 
 const initialMessagesConfig: MensajeConfig[] = [
   { id: 1, min: -1000, max: 50, mensaje: "🚨 CRÍTICO: ¡Acción inmediata!", color: "text-red-400", bg: "bg-red-900/50", bar: "bg-red-500" },
@@ -98,79 +53,80 @@ const WhatsAppIcon = () => (
 
 export default function DashboardApp() {
   const [isMounted, setIsMounted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState('');
   
-  const getInitialState = (key: string, defaultValue: any) => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(key);
-      if (saved) return JSON.parse(saved);
-    }
-    return defaultValue;
-  };
-
   const [systemPin, setSystemPin] = useState('2026');
-  const [casinos, setCasinos] = useState<Casino[]>(initialCasinosData);
-  const [registros, setRegistros] = useState<Record<number, Registro>>(generateRealData());
+  const [casinos, setCasinos] = useState<Casino[]>([]);
   const [messagesConfig, setMessagesConfig] = useState<MensajeConfig[]>(initialMessagesConfig);
   
   const [userRole, setUserRole] = useState<'admin' | 'user'>('admin');
   const [selectedCasinoId, setSelectedCasinoId] = useState<number | null>(null);
   const [inputs, setInputs] = useState<Record<number, { utilidad: string }>>({}); 
-  const [diaActual, setDiaActual] = useState(1); // Se actualiza en el useEffect
+  const [diaActual, setDiaActual] = useState(1);
   const [filtroAdmin, setFiltroAdmin] = useState('TODOS');
   const [showConfig, setShowConfig] = useState(false);
   const [configTarget, setConfigTarget] = useState<number | null>(null); 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [activeInputId, setActiveInputId] = useState<number | null>(null);
 
+  // --- OBTENER DATOS DE SUPABASE ---
+  const fetchSupabaseData = async () => {
+    setIsLoading(true);
+    // Traer Casinos
+    const { data: casinosData, error } = await supabase.from('casinos').select('*').order('id');
+    if (casinosData) setCasinos(casinosData);
+    if (error) console.error("Error cargando casinos:", error);
+
+    // Traer Configuración del PIN Admin
+    const { data: configData } = await supabase.from('app_config').select('system_pin').eq('id', 1).single();
+    if (configData) setSystemPin(configData.system_pin);
+    
+    setIsLoading(false);
+  };
+
   useEffect(() => {
     setIsMounted(true);
-    setSystemPin(getInitialState('system_pin', '2026'));
-    setCasinos(getInitialState('casinos_data', initialCasinosData));
-    setRegistros(getInitialState('casinos_registros', generateRealData()));
-    setMessagesConfig(getInitialState('casinos_msgs', initialMessagesConfig));
-    
-    // --- NUEVO: Lee el día actual del calendario real
     const today = new Date().getDate();
     setDiaActual(today);
+    
+    // Configuración local de mensajes (esto no cambia a menudo)
+    if (typeof window !== 'undefined') {
+      const savedMsgs = localStorage.getItem('casinos_msgs');
+      if (savedMsgs) setMessagesConfig(JSON.parse(savedMsgs));
+    }
+
+    fetchSupabaseData(); // Cargar la BD real
   }, []);
 
   useEffect(() => {
     if (isMounted) {
-      localStorage.setItem('casinos_data', JSON.stringify(casinos));
-      localStorage.setItem('casinos_registros', JSON.stringify(registros));
       localStorage.setItem('casinos_msgs', JSON.stringify(messagesConfig));
-      localStorage.setItem('system_pin', JSON.stringify(systemPin));
     }
-  }, [casinos, registros, messagesConfig, systemPin, isMounted]);
+  }, [messagesConfig, isMounted]);
 
   const formatoPesos = (val: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(val);
-  
   const getPromedioEsperado = (meta: number) => (meta / 30) * diaActual;
   const getPromedioDia = (meta: number) => meta / 30;
 
   const evaluarCasino = (casino: Casino) => {
-    const registro = registros[casino.id] || { utilidad: 0, fecha: null, locked: false, alertaCero: false };
-    
     const promedioEsperado = getPromedioEsperado(casino.metaUtilidad);
-    const porcentajeMensual = casino.metaUtilidad > 0 ? (registro.utilidad / casino.metaUtilidad) * 100 : 0;
-    const rendimientoDiario = promedioEsperado > 0 ? (registro.utilidad / promedioEsperado) * 100 : 0;
-    
-    const balance = registro.utilidad - promedioEsperado;
+    const porcentajeMensual = casino.metaUtilidad > 0 ? (casino.utilidad / casino.metaUtilidad) * 100 : 0;
+    const rendimientoDiario = promedioEsperado > 0 ? (casino.utilidad / promedioEsperado) * 100 : 0;
+    const balance = casino.utilidad - promedioEsperado;
     
     const config = messagesConfig.find(m => rendimientoDiario >= m.min && rendimientoDiario < m.max) || messagesConfig[0];
     const isExitoso = rendimientoDiario >= 100;
 
     return {
       ...casino,
-      registro,
       porcentajeMensual,
       rendimientoDiario,
       promedioEsperado,
       balance,
       promedioDia: getPromedioDia(casino.metaUtilidad),
-      faltante: casino.metaUtilidad - registro.utilidad,
+      faltante: casino.metaUtilidad - casino.utilidad,
       mensaje: config.mensaje,
       color: config.color,
       bg: isExitoso ? 'bg-green-600' : config.bg,
@@ -184,12 +140,14 @@ export default function DashboardApp() {
       setUserRole('admin');
       setSelectedCasinoId(null);
       setIsAuthenticated(true);
+      fetchSupabaseData(); // Refrescar al entrar
     } else {
       const casinoEncontrado = casinos.find(c => c.pin === pinInput);
       if (casinoEncontrado) {
         setUserRole('user');
         setSelectedCasinoId(casinoEncontrado.id);
         setIsAuthenticated(true);
+        fetchSupabaseData(); // Refrescar al entrar
       } else {
         alert("PIN Incorrecto");
         setPinInput('');
@@ -207,66 +165,66 @@ export default function DashboardApp() {
   const openConfirmation = (id: number) => {
     const rawValue = inputs[id]?.utilidad;
     if (rawValue === '' || rawValue === undefined) return alert("Por favor ingresa un valor.");
-    
     const value = parseFloat(rawValue);
-    
-    if (isNaN(value)) {
-      return alert("Error: Ingresa un número válido. Se permiten números negativos usando el signo '-'.");
-    }
+    if (isNaN(value)) return alert("Error: Ingresa un número válido.");
 
     setActiveInputId(id);
     setShowConfirmModal(true);
   };
 
-  const confirmEntry = () => {
+  // --- GUARDAR EN LA NUBE (SUPABASE) ---
+  const confirmEntry = async () => {
     if (!activeInputId) return;
     
     const valueToAdd = parseFloat(inputs[activeInputId]?.utilidad);
     const now = new Date();
     const fechaStr = now.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const esCero = valueToAdd === 0;
 
-    setRegistros(prev => {
-      const utilidadAnterior = prev[activeInputId]?.utilidad || 0;
-      const esCero = valueToAdd === 0;
-      
-      return {
-        ...prev,
-        [activeInputId]: {
-          utilidad: utilidadAnterior + valueToAdd,
-          fecha: fechaStr,
-          locked: false, 
-          alertaCero: esCero
-        }
-      };
-    });
-    
+    const casinoActual = casinos.find(c => c.id === activeInputId);
+    if (!casinoActual) return;
+
+    const nuevaUtilidad = Number(casinoActual.utilidad) + valueToAdd;
+
+    // Actualizar optimista en pantalla
+    setCasinos(prev => prev.map(c => c.id === activeInputId ? { ...c, utilidad: nuevaUtilidad, fecha: fechaStr, alertaCero: esCero } : c));
     setInputs(prev => ({ ...prev, [activeInputId]: { utilidad: '' } }));
     setShowConfirmModal(false);
     setActiveInputId(null);
+
+    // Guardar en Supabase
+    await supabase.from('casinos').update({ utilidad: nuevaUtilidad, fecha: fechaStr, alertaCero: esCero }).eq('id', activeInputId);
   };
 
-  const updateCasinoMeta = (id: number, field: keyof Casino, value: string) => {
-    setCasinos(prev => prev.map(c => {
-      if (c.id === id) {
-        if (field === 'pin' || field === 'nombre' || field === 'categoria' || field === 'dia') {
-          return { ...c, [field]: value };
-        }
-        return { ...c, [field]: parseFloat(value) || 0 };
-      }
-      return c;
-    }));
+  const updateCasinoMeta = async (id: number, field: keyof Casino, value: string) => {
+    let finalValue: string | number = value;
+    let updates: any = {};
 
-    if (field === 'metaMensual' || field === 'metaUtilidad') {
-      setRegistros(prev => ({
-        ...prev,
-        [id]: {
-          utilidad: 0,
-          fecha: new Date().toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
-          locked: false,
-          alertaCero: false
-        }
-      }));
+    if (field === 'pin' || field === 'nombre' || field === 'categoria' || field === 'dia') {
+      finalValue = value;
+      updates[field] = value;
+    } else {
+      finalValue = parseFloat(value) || 0;
+      updates[field] = finalValue;
     }
+
+    // Si cambian metas, resetear utilidad
+    if (field === 'metaMensual' || field === 'metaUtilidad') {
+      updates.utilidad = 0;
+      updates.alertaCero = false;
+      updates.fecha = new Date().toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Actualizar local
+    setCasinos(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    
+    // Actualizar Supabase
+    await supabase.from('casinos').update(updates).eq('id', id);
+  };
+
+  const handleSystemPinUpdate = async (newPin: string) => {
+    setSystemPin(newPin);
+    await supabase.from('app_config').update({ system_pin: newPin }).eq('id', 1);
   };
 
   const casinosFiltrados = casinos.filter(c => {
@@ -280,9 +238,9 @@ export default function DashboardApp() {
   const totales = casinosFiltrados.reduce((acc, c) => {
     const evalC = evaluarCasino(c);
     return {
-      metaVentas: acc.metaVentas + c.metaMensual,
-      metaUtilidad: acc.metaUtilidad + c.metaUtilidad,
-      utilidadReal: acc.utilidadReal + evalC.registro.utilidad
+      metaVentas: acc.metaVentas + Number(c.metaMensual),
+      metaUtilidad: acc.metaUtilidad + Number(c.metaUtilidad),
+      utilidadReal: acc.utilidadReal + Number(c.utilidad)
     };
   }, { metaVentas: 0, metaUtilidad: 0, utilidadReal: 0 });
 
@@ -290,7 +248,7 @@ export default function DashboardApp() {
     let csv = "Local,Meta Ventas,Meta Utilidad,Utilidad Real,Avance Mensual %,Rendimiento Diario %,Fecha Cierre\n";
     casinosFiltrados.forEach(c => {
       const data = evaluarCasino(c);
-      csv += `${data.nombre},${data.metaMensual},${data.metaUtilidad},${data.registro.utilidad},${data.porcentajeMensual.toFixed(2)}%,${data.rendimientoDiario.toFixed(2)}%,${data.registro.fecha || 'N/A'}\n`;
+      csv += `${data.nombre},${data.metaMensual},${data.metaUtilidad},${data.utilidad},${data.porcentajeMensual.toFixed(2)}%,${data.rendimientoDiario.toFixed(2)}%,${data.fecha || 'N/A'}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -308,25 +266,33 @@ export default function DashboardApp() {
         <div className="z-10 text-center mb-8">
           <Shield className="w-16 h-16 mx-auto text-emerald-400 mb-4" />
           <h1 className="text-3xl font-bold">Casino Control</h1>
-          <p className="text-gray-500 mt-2">Ingrese PIN de seguridad o PIN de local</p>
+          <p className="text-gray-500 mt-2">Sistema Conectado a la Nube</p>
         </div>
-        <div className="z-10 bg-gray-900 p-8 rounded-xl shadow-2xl border border-gray-800 w-11/12 max-w-sm">
-          <div className="flex justify-center gap-2 mb-6">
-            {[0,1,2,3].map((i) => (
-              <div key={i} className={`w-4 h-4 rounded-full ${pinInput.length > i ? 'bg-emerald-400' : 'bg-gray-700'}`}></div>
-            ))}
+        
+        {isLoading ? (
+           <div className="z-10 flex flex-col items-center text-emerald-400">
+             <Loader2 className="w-10 h-10 animate-spin mb-4" />
+             <p>Sincronizando Base de Datos...</p>
+           </div>
+        ) : (
+          <div className="z-10 bg-gray-900 p-8 rounded-xl shadow-2xl border border-gray-800 w-11/12 max-w-sm">
+            <div className="flex justify-center gap-2 mb-6">
+              {[0,1,2,3].map((i) => (
+                <div key={i} className={`w-4 h-4 rounded-full ${pinInput.length > i ? 'bg-emerald-400' : 'bg-gray-700'}`}></div>
+              ))}
+            </div>
+            <input 
+              type="password" 
+              value={pinInput} 
+              onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0,4))}
+              className="w-full text-center text-2xl tracking-[1em] bg-gray-800 border border-gray-600 rounded px-4 py-3 mb-4 focus:outline-none focus:border-emerald-500"
+              placeholder="****"
+            />
+            <button onClick={handleLogin} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded transition">
+              Acceder
+            </button>
           </div>
-          <input 
-            type="password" 
-            value={pinInput} 
-            onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0,4))}
-            className="w-full text-center text-2xl tracking-[1em] bg-gray-800 border border-gray-600 rounded px-4 py-3 mb-4 focus:outline-none focus:border-emerald-500"
-            placeholder="****"
-          />
-          <button onClick={handleLogin} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded transition">
-            Acceder
-          </button>
-        </div>
+        )}
       </div>
     );
   }
@@ -334,7 +300,6 @@ export default function DashboardApp() {
   const valorAbonoModal = activeInputId ? parseFloat(inputs[activeInputId]?.utilidad || '0') : 0;
   const esCeroModal = valorAbonoModal === 0;
   const esNegativoModal = valorAbonoModal < 0;
-
   const porcentajeTiempo = Math.round((diaActual / 30) * 100);
 
   return (
@@ -384,7 +349,7 @@ export default function DashboardApp() {
           <Shield className="text-emerald-500" size={32} />
           <div>
             <h1 className="text-2xl font-bold">Casino Control <span className="text-emerald-400">2026</span></h1>
-            <p className="text-xs text-gray-500">Sistema Inteligente de Gestión</p>
+            <p className="text-xs text-gray-500">🟢 En línea - BD Sincronizada</p>
           </div>
         </div>
 
@@ -458,7 +423,7 @@ export default function DashboardApp() {
               </button>
 
               <div className="bg-emerald-900/30 text-emerald-200 text-sm p-3 rounded mb-6 border border-emerald-500/30 mr-24">
-                💡 <strong>Nota para Administrador:</strong> Si cambias el valor de <em>Meta Ventas</em> o <em>Meta Utilidad</em> de un local, su acumulado se reiniciará automáticamente a $0 para iniciar un nuevo ciclo.
+                💡 <strong>Nota:</strong> Los cambios aquí se guardan instantáneamente en la nube para todos los locales.
               </div>
               <div className="grid md:grid-cols-3 gap-8">
                 <div>
@@ -521,7 +486,7 @@ export default function DashboardApp() {
                         <input 
                           type="password" 
                           value={systemPin} 
-                          onChange={e => setSystemPin(e.target.value.replace(/\D/g, '').slice(0,4))}
+                          onChange={e => handleSystemPinUpdate(e.target.value.replace(/\D/g, '').slice(0,4))}
                           className="w-full bg-gray-900 p-2 rounded text-lg tracking-widest text-center font-bold text-emerald-400"
                         />
                         <p className="text-xs text-gray-500 mt-1 text-center">PIN actual: {systemPin}</p>
@@ -541,7 +506,7 @@ export default function DashboardApp() {
           return (
             <div key={data.id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-lg flex flex-col relative">
               
-              {data.registro.alertaCero && userRole === 'admin' && (
+              {data.alertaCero && userRole === 'admin' && (
                 <div className="bg-red-600 text-white text-xs text-center font-bold py-1 animate-pulse flex justify-center items-center gap-1">
                   <AlertOctagon size={14} /> ALERTA: Último abono fue de $0. Revisar.
                 </div>
@@ -568,7 +533,7 @@ export default function DashboardApp() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-gray-400">Último Movimiento</p>
-                    <p className="font-bold text-white text-xs">{data.registro.fecha || "Sin registro"}</p>
+                    <p className="font-bold text-white text-xs">{data.fecha || "Sin registro"}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-gray-400">Util. Esperada Día</p>
@@ -583,8 +548,8 @@ export default function DashboardApp() {
                   </div>
                   <div className="flex justify-between border-t border-gray-800 pt-2">
                     <span className="text-gray-400 text-sm font-semibold">Total Acumulado</span>
-                    <span className={`font-bold text-lg ${data.registro.utilidad < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                      {formatoPesos(data.registro.utilidad)}
+                    <span className={`font-bold text-lg ${data.utilidad < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {formatoPesos(data.utilidad)}
                     </span>
                   </div>
                   {data.rendimientoDiario >= 100 && (
