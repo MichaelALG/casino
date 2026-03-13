@@ -6,7 +6,11 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, 
   Download, User, Shield, Settings, Calendar, 
+<<<<<<< HEAD
   Sigma, KeyRound, LogOut, AlertOctagon, X, Loader2, Smartphone
+=======
+  Sigma, KeyRound, LogOut, AlertOctagon, X, Loader2
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
 } from 'lucide-react';
 
 // --- INICIALIZAR SUPABASE ---
@@ -70,6 +74,7 @@ export default function DashboardApp() {
   const [configTarget, setConfigTarget] = useState<number | null>(null); 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [activeInputId, setActiveInputId] = useState<number | null>(null);
+<<<<<<< HEAD
   
   // Nuevo estado para el modal de instalación
   const [showInstallModal, setShowInstallModal] = useState(false);
@@ -87,21 +92,51 @@ export default function DashboardApp() {
     setIsLoading(false);
   };
 
+=======
+
+  // --- OBTENER DATOS DE SUPABASE ---
+  const fetchSupabaseData = async () => {
+    setIsLoading(true);
+    // Traer Casinos
+    const { data: casinosData, error } = await supabase.from('casinos').select('*').order('id');
+    if (casinosData) setCasinos(casinosData);
+    if (error) console.error("Error cargando casinos:", error);
+
+    // Traer Configuración del PIN Admin
+    const { data: configData } = await supabase.from('app_config').select('system_pin').eq('id', 1).single();
+    if (configData) setSystemPin(configData.system_pin);
+    
+    setIsLoading(false);
+  };
+
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
   useEffect(() => {
     setIsMounted(true);
     const today = new Date().getDate();
     setDiaActual(today);
     
+<<<<<<< HEAD
+=======
+    // Configuración local de mensajes (esto no cambia a menudo)
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
     if (typeof window !== 'undefined') {
       const savedMsgs = localStorage.getItem('casinos_msgs');
       if (savedMsgs) setMessagesConfig(JSON.parse(savedMsgs));
     }
 
+<<<<<<< HEAD
     fetchSupabaseData();
   }, []);
 
   useEffect(() => {
     if (isMounted && typeof window !== 'undefined') {
+=======
+    fetchSupabaseData(); // Cargar la BD real
+  }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
       localStorage.setItem('casinos_msgs', JSON.stringify(messagesConfig));
     }
   }, [messagesConfig, isMounted]);
@@ -140,14 +175,22 @@ export default function DashboardApp() {
       setUserRole('admin');
       setSelectedCasinoId(null);
       setIsAuthenticated(true);
+<<<<<<< HEAD
       fetchSupabaseData();
+=======
+      fetchSupabaseData(); // Refrescar al entrar
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
     } else {
       const casinoEncontrado = casinos.find(c => c.pin === pinInput);
       if (casinoEncontrado) {
         setUserRole('user');
         setSelectedCasinoId(casinoEncontrado.id);
         setIsAuthenticated(true);
+<<<<<<< HEAD
         fetchSupabaseData();
+=======
+        fetchSupabaseData(); // Refrescar al entrar
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
       } else {
         alert("PIN Incorrecto");
         setPinInput('');
@@ -172,6 +215,10 @@ export default function DashboardApp() {
     setShowConfirmModal(true);
   };
 
+<<<<<<< HEAD
+=======
+  // --- GUARDAR EN LA NUBE (SUPABASE) ---
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
   const confirmEntry = async () => {
     if (!activeInputId) return;
     
@@ -185,11 +232,19 @@ export default function DashboardApp() {
 
     const nuevaUtilidad = Number(casinoActual.utilidad) + valueToAdd;
 
+<<<<<<< HEAD
+=======
+    // Actualizar optimista en pantalla
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
     setCasinos(prev => prev.map(c => c.id === activeInputId ? { ...c, utilidad: nuevaUtilidad, fecha: fechaStr, alertaCero: esCero } : c));
     setInputs(prev => ({ ...prev, [activeInputId]: { utilidad: '' } }));
     setShowConfirmModal(false);
     setActiveInputId(null);
 
+<<<<<<< HEAD
+=======
+    // Guardar en Supabase
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
     await supabase.from('casinos').update({ utilidad: nuevaUtilidad, fecha: fechaStr, alertaCero: esCero }).eq('id', activeInputId);
   };
 
@@ -205,13 +260,24 @@ export default function DashboardApp() {
       updates[field] = finalValue;
     }
 
+<<<<<<< HEAD
+=======
+    // Si cambian metas, resetear utilidad
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
     if (field === 'metaMensual' || field === 'metaUtilidad') {
       updates.utilidad = 0;
       updates.alertaCero = false;
       updates.fecha = new Date().toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
     }
 
+<<<<<<< HEAD
     setCasinos(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+=======
+    // Actualizar local
+    setCasinos(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    
+    // Actualizar Supabase
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
     await supabase.from('casinos').update(updates).eq('id', id);
   };
 
@@ -250,6 +316,7 @@ export default function DashboardApp() {
     link.click();
   };
   
+<<<<<<< HEAD
   // COMPONENTE DEL MODAL DE INSTALACIÓN
   const InstallModal = () => (
     <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
@@ -290,6 +357,8 @@ export default function DashboardApp() {
     </div>
   );
 
+=======
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
   if (!isMounted) return null;
 
   if (!isAuthenticated) {
@@ -398,6 +467,7 @@ export default function DashboardApp() {
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
+<<<<<<< HEAD
           
           <button onClick={() => setShowInstallModal(true)} className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 border border-emerald-500/50 text-emerald-400 p-2 rounded-lg text-xs font-bold transition-all md:hidden">
              <Smartphone size={16} /> Instalar
@@ -417,6 +487,22 @@ export default function DashboardApp() {
             </button>
           </div>
 
+=======
+          <div className="flex items-center gap-3 bg-gray-800 p-2 rounded-lg border border-gray-700">
+            {userRole === 'admin' ? (
+              <span className="text-emerald-400 flex items-center gap-1 text-sm font-bold"><Shield size={16}/> MODO ADMIN</span>
+            ) : (
+              <span className="text-blue-400 flex items-center gap-1 text-sm font-bold">
+                <User size={16}/> {casinos.find(c => c.id === selectedCasinoId)?.nombre}
+              </span>
+            )}
+            <div className="w-px h-4 bg-gray-600"></div>
+            <button onClick={handleLogout} className="text-gray-400 hover:text-red-400 flex items-center gap-1 text-xs transition-colors">
+              <LogOut size={14} /> Salir
+            </button>
+          </div>
+
+>>>>>>> d8b47c81e98344abfe51dd385c0ae9eb5bb26d32
           <div className="flex items-center gap-2 text-xs bg-gray-800 p-2 rounded border border-gray-700">
             <Calendar size={14} className="text-gray-400"/>
             <span>Día:</span>
