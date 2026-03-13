@@ -1,0 +1,21 @@
+{
+  "name": "Casino Control",
+  "short_name": "Casino",
+  "description": "Sistema Inteligente de Gestión",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "https://z-cdn-media.chatglm.cn/files/9a8f0b6a-4eb0-4355-958e-f0eba195dc97.png?auth_key=1873295030-16af9abaa2f147b5b6f8ada3e9491b35-0-ce3104328fea8a435aa665bd9b5b7482",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://z-cdn-media.chatglm.cn/files/9a8f0b6a-4eb0-4355-958e-f0eba195dc97.png?auth_key=1873295030-16af9abaa2f147b5b6f8ada3e9491b35-0-ce3104328fea8a435aa665bd9b5b7482",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
