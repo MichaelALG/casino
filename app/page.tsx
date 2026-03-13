@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, 
   Download, User, Shield, Settings, Calendar, 
-  Sigma, KeyRound, LogOut, AlertOctagon, X, Loader2
+  Sigma, KeyRound, LogOut, AlertOctagon, X, Loader2, Smartphone
 } from 'lucide-react';
 
 // --- INICIALIZAR SUPABASE ---
@@ -70,6 +70,9 @@ export default function DashboardApp() {
   const [configTarget, setConfigTarget] = useState<number | null>(null); 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [activeInputId, setActiveInputId] = useState<number | null>(null);
+  
+  // Nuevo estado para el modal de instalación
+  const [showInstallModal, setShowInstallModal] = useState(false);
 
   // --- OBTENER DATOS DE SUPABASE ---
   const fetchSupabaseData = async () => {
@@ -247,12 +250,61 @@ export default function DashboardApp() {
     link.click();
   };
   
+  // COMPONENTE DEL MODAL DE INSTALACIÓN
+  const InstallModal = () => (
+    <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+      <div className="bg-gray-800 p-6 rounded-2xl border border-emerald-500/30 shadow-2xl w-full max-w-md relative">
+        <button onClick={() => setShowInstallModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white bg-gray-700/50 p-1 rounded-full"><X size={20}/></button>
+        <div className="text-center mb-6">
+          <div className="bg-emerald-900/50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-emerald-500/50">
+            <Smartphone size={32} className="text-emerald-400" />
+          </div>
+          <h3 className="text-xl font-bold text-white">Instalar Aplicación</h3>
+          <p className="text-sm text-gray-400 mt-2">Agrega <span className="text-emerald-400 font-bold">Casino Control</span> a tu pantalla de inicio para entrar más rápido y usarla en pantalla completa.</p>
+        </div>
+        
+        <div className="space-y-4">
+          {/* ANDROID INSTRUCCIONES */}
+          <div className="bg-gray-900 p-4 rounded-xl border border-gray-700">
+            <h4 className="font-bold text-emerald-400 mb-2 flex items-center gap-2">📱 En Android (Chrome)</h4>
+            <ol className="text-sm text-gray-300 space-y-2 list-decimal list-inside">
+              <li>Toca los <strong>3 puntitos</strong> (<span className="text-gray-400 tracking-widest font-bold">⋮</span>) arriba a la derecha.</li>
+              <li>Selecciona <strong>"Agregar a la pantalla principal"</strong> o "Instalar aplicación".</li>
+              <li>Toca <strong>Instalar</strong> y búscala junto a tus otras apps.</li>
+            </ol>
+          </div>
+
+          {/* IOS INSTRUCCIONES */}
+          <div className="bg-gray-900 p-4 rounded-xl border border-gray-700">
+            <h4 className="font-bold text-blue-400 mb-2 flex items-center gap-2">🍏 En iPhone (Safari)</h4>
+            <ol className="text-sm text-gray-300 space-y-2 list-decimal list-inside">
+              <li>Toca el botón <strong>Compartir</strong> (cuadro con flecha hacia arriba) en la barra de abajo.</li>
+              <li>Desliza hacia abajo y toca <strong>"Agregar a inicio"</strong> (ícono con un +).</li>
+              <li>Toca <strong>Agregar</strong> arriba a la derecha.</li>
+            </ol>
+          </div>
+        </div>
+        
+        <button onClick={() => setShowInstallModal(false)} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl mt-6 transition">Entendido</button>
+      </div>
+    </div>
+  );
+
   if (!isMounted) return null;
 
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center text-white relative overflow-hidden">
+        {showInstallModal && <InstallModal />}
+        
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#444 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
+        
+        <div className="absolute top-4 right-4 z-20">
+           <button onClick={() => setShowInstallModal(true)} className="flex items-center gap-2 bg-gray-800/80 hover:bg-gray-700 border border-emerald-500/50 text-emerald-400 px-4 py-2 rounded-full text-sm font-bold shadow-lg transition-all backdrop-blur-sm">
+             <Smartphone size={16} /> Instalar App
+           </button>
+        </div>
+
         <div className="z-10 text-center mb-8">
           <Shield className="w-16 h-16 mx-auto text-emerald-400 mb-4" />
           <h1 className="text-3xl font-bold">Casino Control</h1>
@@ -295,6 +347,8 @@ export default function DashboardApp() {
   return (
     <div className="min-h-screen bg-gray-900 text-white pb-20 p-4 md:p-8">
       
+      {showInstallModal && <InstallModal />}
+
       {showConfirmModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-600 shadow-2xl w-11/12 max-w-sm text-center">
@@ -344,6 +398,11 @@ export default function DashboardApp() {
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
+          
+          <button onClick={() => setShowInstallModal(true)} className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 border border-emerald-500/50 text-emerald-400 p-2 rounded-lg text-xs font-bold transition-all md:hidden">
+             <Smartphone size={16} /> Instalar
+          </button>
+
           <div className="flex items-center gap-3 bg-gray-800 p-2 rounded-lg border border-gray-700">
             {userRole === 'admin' ? (
               <span className="text-emerald-400 flex items-center gap-1 text-sm font-bold"><Shield size={16}/> MODO ADMIN</span>
@@ -394,6 +453,9 @@ export default function DashboardApp() {
             </div>
             
             <div className="flex gap-2">
+              <button onClick={() => setShowInstallModal(true)} className="hidden md:flex items-center gap-1 px-3 py-1 rounded text-xs bg-gray-800 hover:bg-gray-700 border border-emerald-500/50 text-emerald-400 transition-all">
+                <Smartphone size={14} /> Instalar App
+              </button>
               <button onClick={() => { setShowConfig(!showConfig); setConfigTarget(null); }} className="flex items-center gap-1 px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 border border-gray-600">
                 <Settings size={14}/> Config App
               </button>
