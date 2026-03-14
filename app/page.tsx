@@ -6,7 +6,8 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, 
   Download, User, Shield, Settings, Calendar, 
-  Sigma, KeyRound, LogOut, AlertOctagon, X, Loader2, Smartphone
+  Sigma, KeyRound, LogOut, AlertOctagon, X, Loader2, Smartphone,
+  FileText, BarChart3
 } from 'lucide-react';
 
 // --- INICIALIZAR SUPABASE ---
@@ -20,13 +21,14 @@ interface Casino {
   nombre: string;
   categoria: string;
   dia: string;
-  metaMensual: number; // Meta de Ventas
+  metaMensual: number;
   metaUtilidad: number;
   pin: string;
   utilidad: number; 
   ventasAcumuladas: number; 
   fecha: string | null;
   alertaCero: boolean;
+  isConsolidado?: boolean; // Nueva bandera para detectar si es una tarjeta clonada
 }
 
 interface MensajeConfig {
@@ -73,6 +75,7 @@ export default function DashboardApp() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [activeInputId, setActiveInputId] = useState<number | null>(null);
   const [showInstallModal, setShowInstallModal] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   const fetchSupabaseData = async () => {
     setIsLoading(true);
@@ -98,7 +101,6 @@ export default function DashboardApp() {
 
     fetchSupabaseData();
 
-    // Sincronización en tiempo real
     const channel = supabase.channel('realtime-casinos').on('postgres_changes', { event: '*', schema: 'public', table: 'casinos' }, () => {
       fetchSupabaseData();
     }).subscribe();
@@ -146,7 +148,7 @@ export default function DashboardApp() {
       faltanteVentas,
       mensaje: config.mensaje,
       color: config.color,
-      bg: isExitoso ? 'bg-green-600' : config.bg,
+      bg: casino.isConsolidado ? 'bg-indigo-900' : (isExitoso ? 'bg-green-600' : config.bg),
       barColor: config.bar,
       icono: rendimientoDiario < 50 ? <TrendingDown /> : isExitoso ? <CheckCircle /> : <TrendingUp />
     };
@@ -175,6 +177,7 @@ export default function DashboardApp() {
     setIsAuthenticated(false);
     setPinInput('');
     setLoggedInUserPin('');
+    setShowReport(false);
   };
 
   const openConfirmation = (id: number) => {
@@ -238,18 +241,60 @@ export default function DashboardApp() {
     await supabase.from('app_config').update({ system_pin: newPin }).eq('id', 1);
   };
 
-  const casinosFiltrados = casinos.filter(c => {
-    if (userRole === 'admin') {
-      if (filtroAdmin === 'TODOS') return true;
-      const evalC = evaluarCasino(c);
-      if (filtroAdmin === 'CRITICOS') return evalC.rendimientoDiario < 50;
-      if (filtroAdmin === 'EXITOSOS') return evalC.rendimientoDiario >= 100;
-      return c.categoria === filtroAdmin;
-    }
-    return c.pin === loggedInUserPin;
-  });
+  // --- MOTOR DE CONSOLIDADOS ---
+  const getCasinosProcesados = () => {
+    let filtrados = casinos.filter(c => {
+      if (userRole === 'admin') {
+        if (filtroAdmin === 'TODOS') return true;
+        const evalC = evaluarCasino(c);
+        if (filtroAdmin === 'CRITICOS') return evalC.rendimientoDiario < 50;
+        if (filtroAdmin === 'EXITOSOS') return evalC.rendimientoDiario >= 100;
+        return c.categoria === filtroAdmin;
+      }
+      return c.pin === loggedInUserPin;
+    });
 
-  const totales = casinosFiltrados.reduce((acc, c) => {
+    const gruposPorPin: Record<string, Casino[]> = {};
+    filtrados.forEach(c => {
+      if (!gruposPorPin[c.pin]) gruposPorPin[c.pin] = [];
+      gruposPorPin[c.pin].push(c);
+    });
+
+    const listaFinal: Casino[] = [];
+
+    Object.keys(gruposPorPin).forEach(pin => {
+      const grupo = gruposPorPin[pin];
+      if (grupo.length > 1) {
+        // Encontrar nombre base (ej: "CARTAGO RULETA" -> "CARTAGO")
+        const primerPalabra = grupo[0].nombre.split(' ')[0];
+        
+        const consolidado: Casino = {
+          id: -(parseInt(pin) || Math.floor(Math.random()*10000)), // ID negativo para evitar conflictos
+          nombre: `CONSOLIDADO ${primerPalabra}`,
+          categoria: 'GENERAL',
+          dia: grupo[0].dia,
+          metaMensual: grupo.reduce((sum, c) => sum + Number(c.metaMensual), 0),
+          metaUtilidad: grupo.reduce((sum, c) => sum + Number(c.metaUtilidad), 0),
+          pin: pin,
+          utilidad: grupo.reduce((sum, c) => sum + Number(c.utilidad), 0),
+          ventasAcumuladas: grupo.reduce((sum, c) => sum + Number(c.ventasAcumuladas || 0), 0),
+          fecha: grupo.map(c => c.fecha).sort().reverse()[0] || 'N/A', // Fecha más reciente
+          alertaCero: grupo.some(c => c.alertaCero),
+          isConsolidado: true
+        };
+        // Agregar consolidado de primero en este grupo
+        listaFinal.push(consolidado);
+      }
+      listaFinal.push(...grupo);
+    });
+
+    return listaFinal;
+  };
+
+  const localesAMostrar = getCasinosProcesados();
+
+  // Totales reales (sin sumar los consolidados dobles)
+  const totales = casinos.filter(c => userRole === 'admin' || c.pin === loggedInUserPin).reduce((acc, c) => {
     const evalC = evaluarCasino(c);
     return {
       metaVentas: acc.metaVentas + Number(evalC.metaMensual),
@@ -259,9 +304,12 @@ export default function DashboardApp() {
     };
   }, { metaVentas: 0, ventasReales: 0, metaUtilidad: 0, utilidadReal: 0 });
 
+  const porcentajeGlobalUtilidad = totales.metaUtilidad > 0 ? (totales.utilidadReal / totales.metaUtilidad) * 100 : 0;
+  const porcentajeTiempo = Math.round((diaActual / 30) * 100);
+
   const exportarCSV = () => {
     let csv = "Local,Meta Ventas,Ventas Reales,Meta Utilidad,Utilidad Real,Falta Para Cumplir %,Rendimiento Diario %,Fecha Cierre\n";
-    casinosFiltrados.forEach(c => {
+    localesAMostrar.filter(c => !c.isConsolidado).forEach(c => {
       const data = evaluarCasino(c);
       csv += `${data.nombre},${data.metaMensual},${data.ventasAcumuladas},${data.metaUtilidad},${data.utilidad},${data.faltanteParaCumplir},${data.rendimientoDiario.toFixed(2)}%,${data.fecha || 'N/A'}\n`;
     });
@@ -333,9 +381,102 @@ export default function DashboardApp() {
     );
   }
 
+  // --- REPORTE EJECUTIVO MODAL ---
+  if (showReport && userRole === 'admin') {
+    return (
+      <div className="min-h-screen bg-gray-100 text-gray-900 p-8 animate-in fade-in duration-300">
+         <div className="max-w-4xl mx-auto bg-white p-10 rounded-xl shadow-2xl relative print:shadow-none print:p-0">
+            <button onClick={() => setShowReport(false)} className="absolute top-6 right-6 text-gray-500 hover:text-red-500 print:hidden flex items-center gap-1">
+              <X size={20}/> Cerrar
+            </button>
+            <button onClick={() => window.print()} className="absolute top-6 right-28 bg-emerald-600 text-white px-4 py-2 rounded font-bold print:hidden">
+              🖨️ Imprimir PDF
+            </button>
+
+            <div className="border-b-4 border-emerald-600 pb-6 mb-8 flex items-center justify-between">
+               <div>
+                  <h1 className="text-4xl font-black text-gray-900 uppercase">Reporte Ejecutivo</h1>
+                  <p className="text-gray-500 font-bold tracking-widest mt-2">División Financiera ITA - {new Date().getFullYear()}</p>
+               </div>
+               <div className="text-right">
+                  <p className="text-xl font-bold text-emerald-600">Día {diaActual} del Ciclo</p>
+                  <p className="text-sm text-gray-500">Fecha Impresión: {new Date().toLocaleDateString('es-CO')}</p>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6 mb-10">
+               <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase mb-2">Consolidado Ventas</h3>
+                  <div className="flex justify-between items-end">
+                     <div>
+                        <p className="text-3xl font-black text-gray-800">{formatoPesos(totales.ventasReales)}</p>
+                        <p className="text-sm text-gray-500 mt-1">Meta: {formatoPesos(totales.metaVentas)}</p>
+                     </div>
+                     <span className="text-2xl font-bold text-emerald-500">{totales.metaVentas > 0 ? ((totales.ventasReales/totales.metaVentas)*100).toFixed(1) : 0}%</span>
+                  </div>
+               </div>
+               <div className="bg-blue-50 p-6 rounded-lg border border-blue-100">
+                  <h3 className="text-sm font-bold text-blue-400 uppercase mb-2">Consolidado Utilidad</h3>
+                  <div className="flex justify-between items-end">
+                     <div>
+                        <p className="text-3xl font-black text-blue-900">{formatoPesos(totales.utilidadReal)}</p>
+                        <p className="text-sm text-blue-600 mt-1">Meta: {formatoPesos(totales.metaUtilidad)}</p>
+                     </div>
+                     <span className="text-2xl font-bold text-blue-600">{porcentajeGlobalUtilidad.toFixed(1)}%</span>
+                  </div>
+               </div>
+            </div>
+
+            <div className="mb-10">
+               <h2 className="text-xl font-bold text-gray-800 border-b-2 border-gray-200 pb-2 mb-4">Análisis Técnico y Comercial</h2>
+               <div className="text-gray-700 leading-relaxed space-y-4 text-justify">
+                 <p>
+                   A la fecha, transitando el <strong>día {diaActual} del mes</strong> (lo que representa un consumo del <strong>{porcentajeTiempo}%</strong> del tiempo proyectado), 
+                   la red de operaciones presenta un rendimiento global de utilidad del <strong>{porcentajeGlobalUtilidad.toFixed(1)}%</strong> frente a la meta establecida.
+                 </p>
+                 <p>
+                   {porcentajeGlobalUtilidad >= porcentajeTiempo 
+                    ? <span className="text-emerald-700 font-bold">🟢 FINANCIERAMENTE POSITIVO: El consolidado demuestra que la red está superando las expectativas matemáticas del ciclo. Se sugiere mantener las estrategias operativas actuales y recompensar el rendimiento de los locales destacados.</span> 
+                    : <span className="text-red-600 font-bold">🔴 ATENCIÓN REQUERIDA: El rendimiento global se encuentra por debajo de la línea de tiempo esperada ({porcentajeTiempo}%). Se requiere implementar estrategias comerciales urgentes, auditar los puntos de venta con alertas críticas y realizar intervenciones técnicas en las máquinas de bajo rendimiento.</span>}
+                 </p>
+               </div>
+            </div>
+
+            <h2 className="text-xl font-bold text-gray-800 border-b-2 border-gray-200 pb-2 mb-4">Desglose de Locales Críticos y Exitosos</h2>
+            <table className="w-full text-left border-collapse mb-10">
+               <thead>
+                 <tr className="bg-gray-100 text-gray-600 text-sm">
+                   <th className="p-3 border-b border-gray-300">Sede</th>
+                   <th className="p-3 border-b border-gray-300">Ventas</th>
+                   <th className="p-3 border-b border-gray-300">Utilidad</th>
+                   <th className="p-3 border-b border-gray-300">Logro %</th>
+                   <th className="p-3 border-b border-gray-300">Estado</th>
+                 </tr>
+               </thead>
+               <tbody>
+                 {casinos.map(c => {
+                   const d = evaluarCasino(c);
+                   return (
+                     <tr key={d.id} className="border-b border-gray-200 text-sm">
+                       <td className="p-3 font-bold text-gray-800">{d.nombre}</td>
+                       <td className="p-3 text-gray-600">{formatoPesos(d.ventasAcumuladas)}</td>
+                       <td className="p-3 font-bold text-blue-700">{formatoPesos(d.utilidad)}</td>
+                       <td className="p-3 font-bold">{d.porcentajeMensual.toFixed(1)}%</td>
+                       <td className={`p-3 font-bold ${d.rendimientoDiario < 50 ? 'text-red-500' : 'text-emerald-500'}`}>
+                         {d.rendimientoDiario < 50 ? 'En Riesgo' : 'Óptimo'}
+                       </td>
+                     </tr>
+                   )
+                 })}
+               </tbody>
+            </table>
+         </div>
+      </div>
+    );
+  }
+
   const abonoVentas = parseFloat(inputs[activeInputId!]?.ventas || '0');
   const abonoUtilidad = parseFloat(inputs[activeInputId!]?.utilidad || '0');
-  const porcentajeTiempo = Math.round((diaActual / 30) * 100);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white pb-20 p-4 md:p-8">
@@ -359,7 +500,7 @@ export default function DashboardApp() {
         </div>
       )}
 
-      {/* BARRA DE NAVEGACIÓN RESTAURADA (CON EL DÍA) */}
+      {/* BARRA DE NAVEGACIÓN */}
       <nav className="mb-4 flex flex-col md:flex-row justify-between items-center gap-4 border-b border-gray-700 pb-4">
         <div className="flex items-center gap-3">
           <Shield className="text-emerald-500" size={32} />
@@ -425,11 +566,16 @@ export default function DashboardApp() {
             </div>
             
             <div className="flex gap-2">
+              {/* BOTÓN REPORTE EJECUTIVO */}
+              <button onClick={() => setShowReport(true)} className="flex items-center gap-1 px-4 py-1 rounded text-xs bg-blue-700 hover:bg-blue-600 font-bold border border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]">
+                <FileText size={14}/> Reporte Ejecutivo
+              </button>
+              
               <button onClick={() => setShowInstallModal(true)} className="hidden md:flex items-center gap-1 px-3 py-1 rounded text-xs bg-gray-800 text-emerald-400 border border-emerald-500/50">
-                <Smartphone size={14} /> Instalar App
+                <Smartphone size={14} /> Instalar
               </button>
               <button onClick={() => { setShowConfig(!showConfig); setConfigTarget(null); }} className="flex items-center gap-1 px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 border border-gray-600">
-                <Settings size={14}/> Config App
+                <Settings size={14}/> Config
               </button>
               <button onClick={exportarCSV} className="flex items-center gap-1 px-4 py-1 rounded text-xs bg-emerald-600 hover:bg-emerald-500 font-semibold">
                 <Download size={14}/> CSV
@@ -485,24 +631,27 @@ export default function DashboardApp() {
         </>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {casinosFiltrados.map(casino => {
+      {/* TARJETAS DE LOCALES */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-12">
+        {localesAMostrar.map(casino => {
           const data = evaluarCasino(casino);
+          const porcentajeTiempo = Math.round((diaActual / 30) * 100);
+
           return (
-            <div key={data.id} className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-xl flex flex-col relative">
+            <div key={data.id} className={`bg-gray-800 rounded-2xl border ${data.isConsolidado ? 'border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.3)]' : 'border-gray-700'} overflow-hidden shadow-xl flex flex-col relative`}>
               
-              {/* RESTAURADO: LOGO EN LA ESQUINA */}
               <div className={`p-4 ${data.bg} border-b border-black/20 relative transition-colors duration-500`}>
-                <img 
-                  src="https://z-cdn-media.chatglm.cn/files/9a8f0b6a-4eb0-4355-958e-f0eba195dc97.png?auth_key=1873295030-16af9abaa2f147b5b6f8ada3e9491b35-0-ce3104328fea8a435aa665bd9b5b7482" 
-                  alt="Ruleta" 
-                  className="absolute top-2 left-2 w-10 h-10 rounded-full border-2 border-white shadow-md object-cover opacity-90"
-                />
-                <div className="flex justify-between items-center ml-12">
+                {!data.isConsolidado && (
+                  <img src="https://z-cdn-media.chatglm.cn/files/9a8f0b6a-4eb0-4355-958e-f0eba195dc97.png?auth_key=1873295030-16af9abaa2f147b5b6f8ada3e9491b35-0-ce3104328fea8a435aa665bd9b5b7482" alt="Logo" className="absolute top-2 left-2 w-10 h-10 rounded-full border-2 border-white shadow-md object-cover opacity-90"/>
+                )}
+                <div className={`flex justify-between items-center ${!data.isConsolidado ? 'ml-12' : ''}`}>
                   <span className="text-[10px] font-bold bg-black/20 px-2 py-1 rounded uppercase tracking-wider">{data.categoria}</span>
                   <span className="text-xs font-bold text-white/70">{data.fecha || 'Sin cierres'}</span>
                 </div>
                 <h2 className="text-2xl font-black text-center text-white mt-4 mb-2 tracking-tight uppercase">{data.nombre}</h2>
+                {data.isConsolidado && (
+                  <p className="text-center text-xs font-bold bg-white/20 inline-block px-3 py-1 rounded-full mx-auto w-max mb-2">⭐ VISTA GLOBAL</p>
+                )}
               </div>
 
               <div className="p-6 flex-grow">
@@ -519,13 +668,19 @@ export default function DashboardApp() {
                   </div>
                 </div>
 
-                {/* NUEVO: ESTADÍSTICAS Y BARRA DELGADA DE VENTAS */}
-                <div className="flex justify-between text-[10px] text-gray-400 px-1 mb-1">
+                {/* VENTAS: LOGRO ENCIMA DEL INDICADOR Y FALTA A LA DERECHA */}
+                <div className="flex justify-end text-[10px] text-gray-400 px-1 mb-6 mt-1 text-right">
                   <span>Falta para ventas: <span className={`font-bold ${data.faltanteVentas <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteVentas))}</span></span>
-                  <span className={data.porcentajeVentas >= porcentajeTiempo ? 'text-green-400 font-bold' : 'text-white'}>Logro: {data.porcentajeVentas.toFixed(1)}%</span>
                 </div>
-                <div className="h-1.5 bg-gray-900 rounded-full relative overflow-hidden mb-5">
-                   <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${Math.min(data.porcentajeVentas, 100)}%` }}></div>
+                
+                <div className="h-2 bg-gray-900 rounded-full relative mb-5">
+                   <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
+                     <span className="text-emerald-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-emerald-500/30 whitespace-nowrap shadow-lg">
+                       Logro Ventas: {data.porcentajeVentas.toFixed(1)}%
+                     </span>
+                     <div className="w-1 h-5 bg-emerald-500 rounded"></div>
+                   </div>
+                   <div className="h-full bg-emerald-500 transition-all duration-1000 rounded-full" style={{ width: `${Math.min(data.porcentajeVentas, 100)}%` }}></div>
                 </div>
 
                 <div className="border-t border-gray-700 my-4"></div>
@@ -542,66 +697,101 @@ export default function DashboardApp() {
                   </div>
                 </div>
 
-                <div className="flex justify-between text-[11px] px-1 mb-2">
+                <div className="flex justify-between text-[11px] px-1 mb-6 mt-1">
                   <span className="text-gray-400">Deberías llevar: <span className="text-blue-300 font-bold">{formatoPesos(data.promedioEsperado)}</span></span>
-                  <span className="text-gray-400">Falta cumplir: <span className={`font-bold ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span></span>
+                  <span className="text-gray-400 text-right">Falta cumplir: <span className={`font-bold ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span></span>
                 </div>
 
-                {/* RESTAURADO: MARCADOR AZUL DEL TIEMPO */}
-                <div className="text-[10px] font-bold text-gray-400 px-1 mt-3 mb-5 text-right">
-                   <span className={data.porcentajeMensual >= porcentajeTiempo ? 'text-green-400' : 'text-white'}>
-                     Logro Utilidad: {data.porcentajeMensual.toFixed(1)}%
-                   </span>
-                </div>
+                {/* UTILIDAD: MARCADOR AZUL DEL TIEMPO */}
                 <div className="h-2 bg-gray-900 rounded-full relative mb-6">
                   <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
-                    <span className="text-blue-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-blue-500/30 whitespace-nowrap">
-                      Día {diaActual} ({porcentajeTiempo}%)
+                    <span className="text-blue-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-blue-500/30 whitespace-nowrap shadow-lg">
+                      Logro Utilidad: {data.porcentajeMensual.toFixed(1)}% | Día {diaActual}
                     </span>
                     <div className="w-1 h-5 bg-blue-500 rounded"></div>
                   </div>
                   <div className={`h-full ${data.barColor} transition-all duration-1000 rounded-full`} style={{ width: `${Math.min(data.porcentajeMensual, 100)}%` }}></div>
                 </div>
 
-                {/* DOBLE INGRESO DE DATOS */}
-                <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-600 mt-2">
-                  <label className="text-[10px] text-emerald-400 font-bold uppercase block mb-3 text-center">Cierre de Turno</label>
-                  
-                  <div className="space-y-2 mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400 w-16">Ventas:</span>
-                      <input
-                        type="number" placeholder="$ Ingresar Ventas"
-                        className="flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:border-emerald-500 text-sm"
-                        value={inputs[data.id]?.ventas || ''}
-                        onChange={(e) => setInputs((prev) => ({ ...prev, [data.id]: { ...prev[data.id], ventas: e.target.value } }))}
-                      />
-                    </div>
+                {/* DOBLE INGRESO DE DATOS (Se oculta si es una tarjeta Consolidada) */}
+                {!data.isConsolidado && (
+                  <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-600 mt-2">
+                    <label className="text-[10px] text-emerald-400 font-bold uppercase block mb-3 text-center">Cierre de Turno</label>
                     
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400 w-16">Utilidad:</span>
-                      <input
-                        type="number" placeholder="$ Ingresar Utilidad"
-                        className="flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 text-sm"
-                        value={inputs[data.id]?.utilidad || ''}
-                        onChange={(e) => setInputs((prev) => ({ ...prev, [data.id]: { ...prev[data.id], utilidad: e.target.value } }))}
-                      />
+                    <div className="space-y-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 w-16">Ventas:</span>
+                        <input
+                          type="number" placeholder="$ Ingresar Ventas"
+                          className="flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:border-emerald-500 text-sm"
+                          value={inputs[data.id]?.ventas || ''}
+                          onChange={(e) => setInputs((prev) => ({ ...prev, [data.id]: { ...prev[data.id], ventas: e.target.value } }))}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 w-16">Utilidad:</span>
+                        <input
+                          type="number" placeholder="$ Ingresar Utilidad"
+                          className="flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 text-sm"
+                          value={inputs[data.id]?.utilidad || ''}
+                          onChange={(e) => setInputs((prev) => ({ ...prev, [data.id]: { ...prev[data.id], utilidad: e.target.value } }))}
+                        />
+                      </div>
                     </div>
+
+                    <button 
+                      onClick={() => openConfirmation(data.id)}
+                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition shadow-lg"
+                    >
+                      Guardar Datos del Turno
+                    </button>
                   </div>
-
-                  <button 
-                    onClick={() => openConfirmation(data.id)}
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition shadow-lg"
-                  >
-                    Guardar Datos del Turno
-                  </button>
-                </div>
-
+                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* GRÁFICA PSEUDO-3D PARA ADMINISTRADORES */}
+      {userRole === 'admin' && (
+        <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-2xl mb-8">
+           <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 border-b border-gray-700 pb-2">
+             <BarChart3 className="text-blue-400"/> Rendimiento Consolidado de Locales (Utilidad %)
+           </h3>
+           <div className="flex items-end h-72 gap-6 overflow-x-auto pb-6 pt-10 scrollbar-thin scrollbar-thumb-gray-600">
+              {localesAMostrar.filter(c => !c.isConsolidado).map(c => {
+                 const data = evaluarCasino(c);
+                 // Limitar la barra a 120% para que no se salga de la pantalla si sobrepasan la meta
+                 const alturaVisual = Math.min(data.porcentajeMensual, 120); 
+                 return (
+                   <div key={c.id} className="w-16 flex flex-col items-center flex-shrink-0 group">
+                      <span className="text-[10px] text-blue-300 font-bold mb-2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-gray-900 px-2 py-1 rounded">
+                        {data.porcentajeMensual.toFixed(1)}%
+                      </span>
+                      {/* CILINDRO 3D (CSS PURO) */}
+                      <div className="w-12 bg-gray-900 rounded-t-lg relative flex-shrink-0 border border-gray-700 border-b-0" style={{ height: '200px' }}>
+                         <div 
+                           className="absolute bottom-0 w-full rounded-t-lg shadow-[inset_-4px_0_10px_rgba(0,0,0,0.6)] border-r-2 border-r-black/50 transition-all duration-1000 flex items-start justify-center pt-2"
+                           style={{ 
+                             height: `${alturaVisual}%`,
+                             background: data.porcentajeMensual >= 100 ? 'linear-gradient(to top, #064e3b, #10b981)' : 'linear-gradient(to top, #1e3a8a, #3b82f6)'
+                           }}
+                         >
+                           {/* Tapa del cilindro para efecto 3D */}
+                           <div className="absolute -top-1 w-[90%] h-3 bg-white/30 rounded-[50%]"></div>
+                         </div>
+                      </div>
+                      <span className="text-[10px] text-gray-400 mt-4 rotate-[-45deg] origin-top-left w-20 text-right font-bold truncate">
+                        {c.nombre}
+                      </span>
+                   </div>
+                 )
+              })}
+           </div>
+        </div>
+      )}
       
       <footer className="fixed bottom-0 left-0 right-0 bg-gray-950 border-t border-gray-800 p-4 text-center z-40">
         <div className="flex flex-col md:flex-row justify-center items-center gap-2 text-[10px] text-gray-500 font-bold uppercase tracking-widest">
