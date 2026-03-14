@@ -2,15 +2,14 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.5.0
+// VERSIÓN: v1.5.1
 // FECHA: 14 de Marzo de 2026
-// HORA: 02:20 AM (Aprox)
+// HORA: 02:40 AM
 // DESCRIPCIÓN DE CAMBIOS:
-// - Implementación de Control de Versiones en cabecera.
-// - Reporte Financiero sectorizado (Total, Gambling, Sociedades).
-// - Cabecera de reporte con Logo Ruleta y nuevo título.
-// - Gráfica 3D actualizada con doble cilindro (Ventas y Utilidad).
-// - Nombres en gráfica en formato vertical para mejor lectura.
+// - CORRECCIÓN CRÍTICA: Los paneles de totales superiores ahora son reactivos
+//   a los filtros (Gambling, Sociedades, Todos).
+// - Refactorización: Separación de la lógica matemática entre "Totales Visuales" 
+//   (Dinámicos en pantalla) y "Totales Generales" (Fijos para el PDF).
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -253,20 +252,23 @@ export default function DashboardApp() {
     await supabase.from('app_config').update({ system_pin: newPin }).eq('id', 1);
   };
 
-  const getCasinosProcesados = () => {
-    let filtrados = casinos.filter(c => {
-      if (userRole === 'admin') {
-        if (filtroAdmin === 'TODOS') return true;
-        const evalC = evaluarCasino(c);
-        if (filtroAdmin === 'CRITICOS') return evalC.rendimientoDiario < 50;
-        if (filtroAdmin === 'EXITOSOS') return evalC.rendimientoDiario >= 100;
-        return c.categoria === filtroAdmin;
-      }
-      return c.pin === loggedInUserPin;
-    });
+  // --- LÓGICA DE FILTRADO Y CONSOLIDADO ---
+  
+  // 1. Lista puramente visual (Reacciona a los botones del administrador)
+  const listaFiltradaVisual = casinos.filter(c => {
+    if (userRole === 'admin') {
+      if (filtroAdmin === 'TODOS') return true;
+      const evalC = evaluarCasino(c);
+      if (filtroAdmin === 'CRITICOS') return evalC.rendimientoDiario < 50;
+      if (filtroAdmin === 'EXITOSOS') return evalC.rendimientoDiario >= 100;
+      return c.categoria === filtroAdmin;
+    }
+    return c.pin === loggedInUserPin;
+  });
 
+  const getCasinosProcesados = () => {
     const gruposPorPin: Record<string, Casino[]> = {};
-    filtrados.forEach(c => {
+    listaFiltradaVisual.forEach(c => {
       if (!gruposPorPin[c.pin]) gruposPorPin[c.pin] = [];
       gruposPorPin[c.pin].push(c);
     });
@@ -301,7 +303,7 @@ export default function DashboardApp() {
 
   const localesAMostrar = getCasinosProcesados();
 
-  // Función genérica para calcular totales
+  // Función genérica para sumar dinero
   const calcularTotalesBase = (lista: Casino[]) => {
     return lista.reduce((acc, c) => {
       const evalC = evaluarCasino(c);
@@ -314,13 +316,17 @@ export default function DashboardApp() {
     }, { metaVentas: 0, ventasReales: 0, metaUtilidad: 0, utilidadReal: 0 });
   };
 
-  // Cálculos Sectorizados
-  const listaSoloLocales = casinos.filter(c => userRole === 'admin' || c.pin === loggedInUserPin);
-  const totales = calcularTotalesBase(listaSoloLocales);
-  const totalesGambling = calcularTotalesBase(listaSoloLocales.filter(c => c.categoria === 'GAMBLING'));
-  const totalesSociedades = calcularTotalesBase(listaSoloLocales.filter(c => c.categoria === 'SOCIEDADES'));
+  // --- CEREBROS SEPARADOS ---
+  // A. Totales Dinámicos (Responden a los botones en pantalla)
+  const totalesVisuales = calcularTotalesBase(listaFiltradaVisual);
 
-  const porcentajeGlobalUtilidad = totales.metaUtilidad > 0 ? (totales.utilidadReal / totales.metaUtilidad) * 100 : 0;
+  // B. Totales Fijos (Nunca cambian con los filtros, usados solo para el PDF)
+  const listaTodosLocales = casinos.filter(c => userRole === 'admin' || c.pin === loggedInUserPin);
+  const totalesGenerales = calcularTotalesBase(listaTodosLocales);
+  const totalesGambling = calcularTotalesBase(listaTodosLocales.filter(c => c.categoria === 'GAMBLING'));
+  const totalesSociedades = calcularTotalesBase(listaTodosLocales.filter(c => c.categoria === 'SOCIEDADES'));
+
+  const porcentajeGlobalUtilidad = totalesGenerales.metaUtilidad > 0 ? (totalesGenerales.utilidadReal / totalesGenerales.metaUtilidad) * 100 : 0;
   const porcentajeTiempo = Math.round((diaActual / 30) * 100);
 
   const exportarCSV = () => {
@@ -434,18 +440,18 @@ export default function DashboardApp() {
                     <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">Total General - Ventas</h3>
                     <div className="flex justify-between items-end">
                        <div>
-                          <p className="text-2xl font-black text-gray-800">{formatoPesos(totales.ventasReales)}</p>
-                          <p className="text-xs text-gray-500 mt-1">Meta: {formatoPesos(totales.metaVentas)}</p>
+                          <p className="text-2xl font-black text-gray-800">{formatoPesos(totalesGenerales.ventasReales)}</p>
+                          <p className="text-xs text-gray-500 mt-1">Meta: {formatoPesos(totalesGenerales.metaVentas)}</p>
                        </div>
-                       <span className="text-lg font-bold text-emerald-600">{totales.metaVentas > 0 ? ((totales.ventasReales/totales.metaVentas)*100).toFixed(1) : 0}%</span>
+                       <span className="text-lg font-bold text-emerald-600">{totalesGenerales.metaVentas > 0 ? ((totalesGenerales.ventasReales/totalesGenerales.metaVentas)*100).toFixed(1) : 0}%</span>
                     </div>
                  </div>
                  <div className="bg-blue-50 p-5 rounded-lg border-l-4 border-blue-500">
                     <h3 className="text-xs font-bold text-blue-500 uppercase mb-2">Total General - Utilidad</h3>
                     <div className="flex justify-between items-end">
                        <div>
-                          <p className="text-2xl font-black text-blue-900">{formatoPesos(totales.utilidadReal)}</p>
-                          <p className="text-xs text-blue-600 mt-1">Meta: {formatoPesos(totales.metaUtilidad)}</p>
+                          <p className="text-2xl font-black text-blue-900">{formatoPesos(totalesGenerales.utilidadReal)}</p>
+                          <p className="text-xs text-blue-600 mt-1">Meta: {formatoPesos(totalesGenerales.metaUtilidad)}</p>
                        </div>
                        <span className="text-lg font-bold text-blue-600">{porcentajeGlobalUtilidad.toFixed(1)}%</span>
                     </div>
@@ -519,7 +525,7 @@ export default function DashboardApp() {
                    </tr>
                  </thead>
                  <tbody>
-                   {casinos.map(c => {
+                   {listaTodosLocales.map(c => {
                      const d = evaluarCasino(c);
                      return (
                        <tr key={d.id} className="border-b border-gray-200 text-sm hover:bg-gray-50">
@@ -605,30 +611,31 @@ export default function DashboardApp() {
 
       {userRole === 'admin' && (
         <>
+          {/* TOTALES SUPERIORES (AHORA REACTIVOS AL FILTRO VISUAL) */}
           <div className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 text-center">
+            <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 text-center transition-all duration-300">
               <p className="text-[10px] text-gray-400 uppercase mb-1">Total Meta Ventas</p>
-              <p className="text-lg font-bold text-white">{formatoPesos(totales.metaVentas)}</p>
+              <p className="text-lg font-bold text-white">{formatoPesos(totalesVisuales.metaVentas)}</p>
             </div>
-            <div className="bg-gray-800 p-4 rounded-xl border border-emerald-900 text-center">
+            <div className="bg-gray-800 p-4 rounded-xl border border-emerald-900 text-center transition-all duration-300">
               <p className="text-[10px] text-emerald-400 uppercase mb-1">Ventas Reales</p>
-              <p className="text-lg font-bold text-emerald-400">{formatoPesos(totales.ventasReales)}</p>
+              <p className="text-lg font-bold text-emerald-400">{formatoPesos(totalesVisuales.ventasReales)}</p>
             </div>
-            <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 text-center">
+            <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 text-center transition-all duration-300">
               <p className="text-[10px] text-gray-400 uppercase mb-1">Total Meta Utilidad</p>
-              <p className="text-lg font-bold text-white">{formatoPesos(totales.metaUtilidad)}</p>
+              <p className="text-lg font-bold text-white">{formatoPesos(totalesVisuales.metaUtilidad)}</p>
             </div>
-            <div className="bg-gray-800 p-4 rounded-xl border border-blue-900 text-center">
+            <div className="bg-gray-800 p-4 rounded-xl border border-blue-900 text-center transition-all duration-300">
               <p className="text-[10px] text-blue-400 uppercase mb-1">Utilidad Real Hoy</p>
-              <p className="text-lg font-bold text-blue-400">{formatoPesos(totales.utilidadReal)}</p>
+              <p className="text-lg font-bold text-blue-400">{formatoPesos(totalesVisuales.utilidadReal)}</p>
             </div>
           </div>
 
           <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
-            <div className="flex gap-2 flex-wrap">
-              <button onClick={() => setFiltroAdmin('TODOS')} className={`px-3 py-1 rounded text-xs ${filtroAdmin === 'TODOS' ? 'bg-white text-gray-900' : 'bg-gray-700'}`}>Todos</button>
-              <button onClick={() => setFiltroAdmin('GAMBLING')} className={`px-3 py-1 rounded text-xs ${filtroAdmin === 'GAMBLING' ? 'bg-white text-gray-900' : 'bg-gray-700'}`}>Gambling</button>
-              <button onClick={() => setFiltroAdmin('SOCIEDADES')} className={`px-3 py-1 rounded text-xs ${filtroAdmin === 'SOCIEDADES' ? 'bg-white text-gray-900' : 'bg-gray-700'}`}>Sociedades</button>
+            <div className="flex gap-2 flex-wrap bg-gray-800 p-1 rounded-lg border border-gray-700">
+              <button onClick={() => setFiltroAdmin('TODOS')} className={`px-4 py-1 rounded text-xs font-bold transition-colors ${filtroAdmin === 'TODOS' ? 'bg-white text-gray-900 shadow' : 'text-gray-400 hover:text-white'}`}>Todos</button>
+              <button onClick={() => setFiltroAdmin('GAMBLING')} className={`px-4 py-1 rounded text-xs font-bold transition-colors ${filtroAdmin === 'GAMBLING' ? 'bg-emerald-500 text-white shadow' : 'text-gray-400 hover:text-emerald-400'}`}>Gambling</button>
+              <button onClick={() => setFiltroAdmin('SOCIEDADES')} className={`px-4 py-1 rounded text-xs font-bold transition-colors ${filtroAdmin === 'SOCIEDADES' ? 'bg-blue-500 text-white shadow' : 'text-gray-400 hover:text-blue-400'}`}>Sociedades</button>
             </div>
             
             <div className="flex gap-2">
@@ -830,13 +837,13 @@ export default function DashboardApp() {
              <span className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-500 rounded"></div> Utilidad Real</span>
            </div>
 
-           <div className="flex items-end h-96 gap-6 overflow-x-auto pb-6 pt-10 scrollbar-thin scrollbar-thumb-gray-600">
+           <div className="flex items-end h-[400px] gap-6 overflow-x-auto pb-6 pt-10 scrollbar-thin scrollbar-thumb-gray-600">
               {localesAMostrar.filter(c => !c.isConsolidado).map(c => {
                  const data = evaluarCasino(c);
                  const alturaUtilidad = Math.min(data.porcentajeMensual, 120); 
                  const alturaVentas = Math.min(data.porcentajeVentas, 120); 
                  return (
-                   <div key={c.id} className="w-16 flex flex-col items-center flex-shrink-0 group relative">
+                   <div key={c.id} className="w-16 flex flex-col items-center flex-shrink-0 group relative h-full justify-end">
                       
                       {/* TOOLTIP HOVER CON DATOS EXACTOS */}
                       <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 px-2 py-1 rounded text-xs text-center border border-gray-700 z-10 w-max pointer-events-none shadow-lg">
@@ -865,7 +872,7 @@ export default function DashboardApp() {
 
                       {/* TEXTO VERTICAL (90 grados exactos, de arriba a abajo) */}
                       <span className="text-[10px] text-gray-400 mt-4 font-bold tracking-widest" 
-                            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', height: '100px', textAlign: 'left' }}>
+                            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', height: '120px', textAlign: 'left' }}>
                         {c.nombre}
                       </span>
                    </div>
