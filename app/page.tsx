@@ -24,7 +24,7 @@ interface Casino {
   metaUtilidad: number;
   pin: string;
   utilidad: number; 
-  ventasAcumuladas: number; // NUEVO CAMPO DE VENTAS
+  ventasAcumuladas: number; 
   fecha: string | null;
   alertaCero: boolean;
 }
@@ -63,7 +63,7 @@ export default function DashboardApp() {
   const [messagesConfig, setMessagesConfig] = useState<MensajeConfig[]>(initialMessagesConfig);
   
   const [userRole, setUserRole] = useState<'admin' | 'user'>('admin');
-  const [loggedInUserPin, setLoggedInUserPin] = useState<string>(''); // Nuevo estado para la ruleta
+  const [loggedInUserPin, setLoggedInUserPin] = useState<string>(''); 
   
   const [inputs, setInputs] = useState<Record<number, { utilidad: string, ventas: string }>>({}); 
   const [diaActual, setDiaActual] = useState(1);
@@ -123,9 +123,11 @@ export default function DashboardApp() {
 
     const promedioEsperado = getPromedioEsperado(metaU);
     const porcentajeMensual = metaU > 0 ? (utilAcumulada / metaU) * 100 : 0;
+    const porcentajeVentas = metaV > 0 ? (ventasAcum / metaV) * 100 : 0;
     const rendimientoDiario = promedioEsperado > 0 ? (utilAcumulada / promedioEsperado) * 100 : 0;
     
     const faltanteParaCumplir = metaU - utilAcumulada;
+    const faltanteVentas = metaV - ventasAcum;
     
     const config = messagesConfig.find(m => rendimientoDiario >= m.min && rendimientoDiario < m.max) || messagesConfig[0];
     const isExitoso = rendimientoDiario >= 100;
@@ -137,9 +139,11 @@ export default function DashboardApp() {
       utilidad: utilAcumulada,
       ventasAcumuladas: ventasAcum,
       porcentajeMensual,
+      porcentajeVentas,
       rendimientoDiario,
       promedioEsperado,
       faltanteParaCumplir,
+      faltanteVentas,
       mensaje: config.mensaje,
       color: config.color,
       bg: isExitoso ? 'bg-green-600' : config.bg,
@@ -154,7 +158,6 @@ export default function DashboardApp() {
       setIsAuthenticated(true);
       fetchSupabaseData();
     } else {
-      // Cambio Clave para la Ruleta: Buscar todos los que coincidan con el PIN
       const existePIN = casinos.some(c => c.pin === pinInput);
       if (existePIN) {
         setUserRole('user');
@@ -243,7 +246,6 @@ export default function DashboardApp() {
       if (filtroAdmin === 'EXITOSOS') return evalC.rendimientoDiario >= 100;
       return c.categoria === filtroAdmin;
     }
-    // Para usuarios: Muestra todas las tarjetas que tengan el mismo PIN (ideal para Ruleta)
     return c.pin === loggedInUserPin;
   });
 
@@ -333,6 +335,7 @@ export default function DashboardApp() {
 
   const abonoVentas = parseFloat(inputs[activeInputId!]?.ventas || '0');
   const abonoUtilidad = parseFloat(inputs[activeInputId!]?.utilidad || '0');
+  const porcentajeTiempo = Math.round((diaActual / 30) * 100);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white pb-20 p-4 md:p-8">
@@ -356,6 +359,7 @@ export default function DashboardApp() {
         </div>
       )}
 
+      {/* BARRA DE NAVEGACIÓN RESTAURADA (CON EL DÍA) */}
       <nav className="mb-4 flex flex-col md:flex-row justify-between items-center gap-4 border-b border-gray-700 pb-4">
         <div className="flex items-center gap-3">
           <Shield className="text-emerald-500" size={32} />
@@ -366,7 +370,7 @@ export default function DashboardApp() {
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
-          <button onClick={() => setShowInstallModal(true)} className="flex items-center gap-1 bg-gray-800 text-emerald-400 p-2 rounded-lg text-xs font-bold md:hidden">
+          <button onClick={() => setShowInstallModal(true)} className="flex items-center gap-1 bg-gray-800 text-emerald-400 p-2 rounded-lg text-xs font-bold md:hidden border border-emerald-500/50">
              <Smartphone size={16} /> Instalar
           </button>
 
@@ -382,6 +386,12 @@ export default function DashboardApp() {
             <button onClick={handleLogout} className="text-gray-400 hover:text-red-400 flex items-center gap-1 text-xs">
               <LogOut size={14} /> Salir
             </button>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs bg-gray-800 p-2 rounded border border-gray-700">
+            <Calendar size={14} className="text-gray-400"/>
+            <span>Día:</span>
+            <input type="number" min="1" max="31" value={diaActual} onChange={(e) => setDiaActual(Number(e.target.value))} className="w-10 bg-gray-700 text-center rounded text-white text-xs px-1" />
           </div>
         </div>
       </nav>
@@ -407,7 +417,6 @@ export default function DashboardApp() {
             </div>
           </div>
 
-          {/* BOTONES DE ADMINISTRADOR Y EXPORTAR */}
           <div className="mb-6 flex flex-wrap justify-between items-center gap-4">
             <div className="flex gap-2 flex-wrap">
               <button onClick={() => setFiltroAdmin('TODOS')} className={`px-3 py-1 rounded text-xs ${filtroAdmin === 'TODOS' ? 'bg-white text-gray-900' : 'bg-gray-700'}`}>Todos</button>
@@ -428,7 +437,6 @@ export default function DashboardApp() {
             </div>
           </div>
 
-          {/* PANEL DE CONFIGURACIÓN */}
           {showConfig && (
             <div className="mb-6 bg-gray-800 p-6 rounded-xl border border-emerald-500/50 shadow-lg relative">
               <button onClick={() => setShowConfig(false)} className="absolute top-4 right-4 bg-red-600/20 text-red-400 flex items-center gap-1 px-3 py-1 rounded">
@@ -481,58 +489,78 @@ export default function DashboardApp() {
         {casinosFiltrados.map(casino => {
           const data = evaluarCasino(casino);
           return (
-            <div key={data.id} className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-xl flex flex-col">
+            <div key={data.id} className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-xl flex flex-col relative">
               
-              <div className={`p-4 ${data.bg} border-b border-black/20`}>
-                <div className="flex justify-between items-center">
+              {/* RESTAURADO: LOGO EN LA ESQUINA */}
+              <div className={`p-4 ${data.bg} border-b border-black/20 relative transition-colors duration-500`}>
+                <img 
+                  src="https://z-cdn-media.chatglm.cn/files/9a8f0b6a-4eb0-4355-958e-f0eba195dc97.png?auth_key=1873295030-16af9abaa2f147b5b6f8ada3e9491b35-0-ce3104328fea8a435aa665bd9b5b7482" 
+                  alt="Ruleta" 
+                  className="absolute top-2 left-2 w-10 h-10 rounded-full border-2 border-white shadow-md object-cover opacity-90"
+                />
+                <div className="flex justify-between items-center ml-12">
                   <span className="text-[10px] font-bold bg-black/20 px-2 py-1 rounded uppercase tracking-wider">{data.categoria}</span>
                   <span className="text-xs font-bold text-white/70">{data.fecha || 'Sin cierres'}</span>
                 </div>
-                <h2 className="text-2xl font-black text-center text-white my-2 tracking-tight uppercase">{data.nombre}</h2>
+                <h2 className="text-2xl font-black text-center text-white mt-4 mb-2 tracking-tight uppercase">{data.nombre}</h2>
               </div>
 
-              <div className="p-6 flex-grow space-y-5">
+              <div className="p-6 flex-grow">
                 
-                {/* RENGLONES DE VENTAS */}
-                <div className="grid grid-cols-2 gap-3 text-sm border-b border-gray-700 pb-4">
+                {/* --- SECCIÓN VENTAS --- */}
+                <div className="grid grid-cols-2 gap-3 text-sm mb-2">
                   <div>
-                    <p className="text-gray-400 text-xs">Meta de Ventas</p>
+                    <p className="text-gray-400 text-[11px] uppercase">Meta de Ventas</p>
                     <p className="font-bold text-white">{formatoPesos(data.metaMensual)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-gray-400 text-xs">Acumulado Meta de Ventas</p>
+                    <p className="text-gray-400 text-[11px] uppercase">Acumulado Ventas</p>
                     <p className="font-bold text-emerald-400 text-lg">{formatoPesos(data.ventasAcumuladas)}</p>
                   </div>
                 </div>
 
-                {/* UTILIDAD */}
-                <div className="grid grid-cols-2 gap-3 text-sm">
+                {/* NUEVO: ESTADÍSTICAS Y BARRA DELGADA DE VENTAS */}
+                <div className="flex justify-between text-[10px] text-gray-400 px-1 mb-1">
+                  <span>Falta para ventas: <span className={`font-bold ${data.faltanteVentas <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteVentas))}</span></span>
+                  <span className={data.porcentajeVentas >= porcentajeTiempo ? 'text-green-400 font-bold' : 'text-white'}>Logro: {data.porcentajeVentas.toFixed(1)}%</span>
+                </div>
+                <div className="h-1.5 bg-gray-900 rounded-full relative overflow-hidden mb-5">
+                   <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${Math.min(data.porcentajeVentas, 100)}%` }}></div>
+                </div>
+
+                <div className="border-t border-gray-700 my-4"></div>
+
+                {/* --- SECCIÓN UTILIDAD --- */}
+                <div className="grid grid-cols-2 gap-3 text-sm mb-2">
                   <div>
-                    <p className="text-gray-400 text-xs">Meta Utilidad</p>
+                    <p className="text-gray-400 text-[11px] uppercase">Meta Utilidad</p>
                     <p className="font-bold text-blue-400">{formatoPesos(data.metaUtilidad)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-gray-400 text-xs">Total Acumulado</p>
+                    <p className="text-gray-400 text-[11px] uppercase">Total Acumulado</p>
                     <p className="font-bold text-white text-lg">{formatoPesos(data.utilidad)}</p>
                   </div>
                 </div>
 
-                <div className="h-3 bg-gray-900 rounded-full relative overflow-hidden">
-                   <div className={`h-full ${data.barColor} transition-all duration-1000`} style={{ width: `${Math.min(data.porcentajeMensual, 100)}%` }}></div>
+                <div className="flex justify-between text-[11px] px-1 mb-2">
+                  <span className="text-gray-400">Deberías llevar: <span className="text-blue-300 font-bold">{formatoPesos(data.promedioEsperado)}</span></span>
+                  <span className="text-gray-400">Falta cumplir: <span className={`font-bold ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span></span>
                 </div>
 
-                {/* ALERTAS */}
-                <div className="grid grid-cols-2 text-[11px] gap-2 pt-2">
-                  <div className="bg-gray-900/50 p-2 rounded-lg border border-gray-700">
-                    <span className="text-gray-500 block mb-1">Deberías llevar:</span>
-                    <span className="text-blue-300 font-bold text-xs">{formatoPesos(data.promedioEsperado)}</span>
-                  </div>
-                  <div className="bg-gray-900/50 p-2 rounded-lg border border-gray-700">
-                    <span className="text-gray-500 block mb-1">Te falta para cumplir:</span>
-                    <span className={`font-bold text-xs ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {formatoPesos(Math.max(0, data.faltanteParaCumplir))}
+                {/* RESTAURADO: MARCADOR AZUL DEL TIEMPO */}
+                <div className="text-[10px] font-bold text-gray-400 px-1 mt-3 mb-5 text-right">
+                   <span className={data.porcentajeMensual >= porcentajeTiempo ? 'text-green-400' : 'text-white'}>
+                     Logro Utilidad: {data.porcentajeMensual.toFixed(1)}%
+                   </span>
+                </div>
+                <div className="h-2 bg-gray-900 rounded-full relative mb-6">
+                  <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
+                    <span className="text-blue-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-blue-500/30 whitespace-nowrap">
+                      Día {diaActual} ({porcentajeTiempo}%)
                     </span>
+                    <div className="w-1 h-5 bg-blue-500 rounded"></div>
                   </div>
+                  <div className={`h-full ${data.barColor} transition-all duration-1000 rounded-full`} style={{ width: `${Math.min(data.porcentajeMensual, 100)}%` }}></div>
                 </div>
 
                 {/* DOBLE INGRESO DE DATOS */}
