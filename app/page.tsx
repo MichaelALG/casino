@@ -2,14 +2,11 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.5.1
+// VERSIÓN: v1.5.2
 // FECHA: 14 de Marzo de 2026
-// HORA: 02:40 AM
 // DESCRIPCIÓN DE CAMBIOS:
-// - CORRECCIÓN CRÍTICA: Los paneles de totales superiores ahora son reactivos
-//   a los filtros (Gambling, Sociedades, Todos).
-// - Refactorización: Separación de la lógica matemática entre "Totales Visuales" 
-//   (Dinámicos en pantalla) y "Totales Generales" (Fijos para el PDF).
+// - NUEVO: Porcentaje de Rentabilidad (Utilidad sobre Ventas) debajo del nombre.
+// - Formato de etiqueta (Badge) para la rentabilidad, similar a la categoría.
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -253,8 +250,6 @@ export default function DashboardApp() {
   };
 
   // --- LÓGICA DE FILTRADO Y CONSOLIDADO ---
-  
-  // 1. Lista puramente visual (Reacciona a los botones del administrador)
   const listaFiltradaVisual = casinos.filter(c => {
     if (userRole === 'admin') {
       if (filtroAdmin === 'TODOS') return true;
@@ -303,7 +298,6 @@ export default function DashboardApp() {
 
   const localesAMostrar = getCasinosProcesados();
 
-  // Función genérica para sumar dinero
   const calcularTotalesBase = (lista: Casino[]) => {
     return lista.reduce((acc, c) => {
       const evalC = evaluarCasino(c);
@@ -316,11 +310,7 @@ export default function DashboardApp() {
     }, { metaVentas: 0, ventasReales: 0, metaUtilidad: 0, utilidadReal: 0 });
   };
 
-  // --- CEREBROS SEPARADOS ---
-  // A. Totales Dinámicos (Responden a los botones en pantalla)
   const totalesVisuales = calcularTotalesBase(listaFiltradaVisual);
-
-  // B. Totales Fijos (Nunca cambian con los filtros, usados solo para el PDF)
   const listaTodosLocales = casinos.filter(c => userRole === 'admin' || c.pin === loggedInUserPin);
   const totalesGenerales = calcularTotalesBase(listaTodosLocales);
   const totalesGambling = calcularTotalesBase(listaTodosLocales.filter(c => c.categoria === 'GAMBLING'));
@@ -403,7 +393,6 @@ export default function DashboardApp() {
     );
   }
 
-  // --- REPORTE EJECUTIVO MODAL ---
   if (showReport && userRole === 'admin') {
     return (
       <div className="min-h-screen bg-gray-100 text-gray-900 p-4 md:p-8 animate-in fade-in duration-300">
@@ -415,7 +404,6 @@ export default function DashboardApp() {
               🖨️ Imprimir PDF
             </button>
 
-            {/* CABECERA CON LOGO */}
             <div className="border-b-4 border-emerald-600 pb-6 mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                <div className="flex items-center gap-4">
                   <img src="https://z-cdn-media.chatglm.cn/files/9a8f0b6a-4eb0-4355-958e-f0eba195dc97.png?auth_key=1873295030-16af9abaa2f147b5b6f8ada3e9491b35-0-ce3104328fea8a435aa665bd9b5b7482" 
@@ -432,9 +420,7 @@ export default function DashboardApp() {
                </div>
             </div>
 
-            {/* BLOQUES SECTORIZADOS */}
             <div className="space-y-6 mb-10">
-               {/* GENERAL */}
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  <div className="bg-gray-100 p-5 rounded-lg border-l-4 border-gray-400">
                     <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">Total General - Ventas</h3>
@@ -458,9 +444,7 @@ export default function DashboardApp() {
                  </div>
                </div>
 
-               {/* SECTOR GAMBLING & SOCIEDADES */}
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 {/* GAMBLING */}
                  <div className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
                    <h3 className="font-black text-gray-800 mb-4 border-b pb-2">Sector GAMBLING</h3>
                    <div className="space-y-3">
@@ -477,7 +461,6 @@ export default function DashboardApp() {
                      </div>
                    </div>
                  </div>
-                 {/* SOCIEDADES */}
                  <div className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
                    <h3 className="font-black text-gray-800 mb-4 border-b pb-2">Sector SOCIEDADES</h3>
                    <div className="space-y-3">
@@ -611,7 +594,6 @@ export default function DashboardApp() {
 
       {userRole === 'admin' && (
         <>
-          {/* TOTALES SUPERIORES (AHORA REACTIVOS AL FILTRO VISUAL) */}
           <div className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 text-center transition-all duration-300">
               <p className="text-[10px] text-gray-400 uppercase mb-1">Total Meta Ventas</p>
@@ -703,11 +685,13 @@ export default function DashboardApp() {
         </>
       )}
 
-      {/* TARJETAS DE LOCALES */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-12">
         {localesAMostrar.map(casino => {
           const data = evaluarCasino(casino);
           const porcentajeTiempo = Math.round((diaActual / 30) * 100);
+          
+          // --- CÁLCULO DE LA RENTABILIDAD ---
+          const rentabilidad = data.ventasAcumuladas > 0 ? (data.utilidad / data.ventasAcumuladas) * 100 : 0;
 
           return (
             <div key={data.id} className={`bg-gray-800 rounded-2xl border ${data.isConsolidado ? 'border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.3)]' : 'border-gray-700'} overflow-hidden shadow-xl flex flex-col relative`}>
@@ -720,7 +704,16 @@ export default function DashboardApp() {
                   <span className="text-[10px] font-bold bg-black/20 px-2 py-1 rounded uppercase tracking-wider">{data.categoria}</span>
                   <span className="text-xs font-bold text-white/70">{data.fecha || 'Sin cierres'}</span>
                 </div>
-                <h2 className="text-2xl font-black text-center text-white mt-4 mb-2 tracking-tight uppercase">{data.nombre}</h2>
+                
+                <h2 className="text-2xl font-black text-center text-white mt-4 mb-1 tracking-tight uppercase">{data.nombre}</h2>
+                
+                {/* --- NUEVA ETIQUETA DE RENTABILIDAD --- */}
+                <div className="text-center mb-2">
+                   <span className="text-[10px] font-bold bg-black/40 text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded uppercase tracking-wider">
+                     Rentabilidad: {rentabilidad.toFixed(1)}%
+                   </span>
+                </div>
+
                 {data.isConsolidado && (
                   <p className="text-center text-xs font-bold bg-white/20 inline-block px-3 py-1 rounded-full mx-auto w-max mb-2">⭐ VISTA GLOBAL</p>
                 )}
@@ -728,7 +721,6 @@ export default function DashboardApp() {
 
               <div className="p-6 flex-grow">
                 
-                {/* --- SECCIÓN VENTAS --- */}
                 <div className="grid grid-cols-2 gap-3 text-sm mb-2">
                   <div>
                     <p className="text-gray-400 text-[11px] uppercase">Meta de Ventas</p>
@@ -740,7 +732,6 @@ export default function DashboardApp() {
                   </div>
                 </div>
 
-                {/* VENTAS: LOGRO ENCIMA DEL INDICADOR Y FALTA A LA DERECHA */}
                 <div className="flex justify-end text-[10px] text-gray-400 px-1 mb-6 mt-1 text-right">
                   <span>Falta para ventas: <span className={`font-bold ${data.faltanteVentas <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteVentas))}</span></span>
                 </div>
@@ -757,7 +748,6 @@ export default function DashboardApp() {
 
                 <div className="border-t border-gray-700 my-4"></div>
 
-                {/* --- SECCIÓN UTILIDAD --- */}
                 <div className="grid grid-cols-2 gap-3 text-sm mb-2">
                   <div>
                     <p className="text-gray-400 text-[11px] uppercase">Meta Utilidad</p>
@@ -774,7 +764,6 @@ export default function DashboardApp() {
                   <span className="text-gray-400 text-right">Falta cumplir: <span className={`font-bold ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span></span>
                 </div>
 
-                {/* UTILIDAD: MARCADOR AZUL DEL TIEMPO */}
                 <div className="h-2 bg-gray-900 rounded-full relative mb-6">
                   <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
                     <span className="text-blue-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-blue-500/30 whitespace-nowrap shadow-lg">
@@ -785,7 +774,6 @@ export default function DashboardApp() {
                   <div className={`h-full ${data.barColor} transition-all duration-1000 rounded-full`} style={{ width: `${Math.min(data.porcentajeMensual, 100)}%` }}></div>
                 </div>
 
-                {/* DOBLE INGRESO DE DATOS */}
                 {!data.isConsolidado && (
                   <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-600 mt-2">
                     <label className="text-[10px] text-emerald-400 font-bold uppercase block mb-3 text-center">Cierre de Turno</label>
@@ -826,7 +814,6 @@ export default function DashboardApp() {
         })}
       </div>
 
-      {/* GRÁFICA PSEUDO-3D DOBLE PARA ADMINISTRADORES */}
       {userRole === 'admin' && (
         <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-2xl mb-8">
            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
@@ -845,15 +832,12 @@ export default function DashboardApp() {
                  return (
                    <div key={c.id} className="w-16 flex flex-col items-center flex-shrink-0 group relative h-full justify-end">
                       
-                      {/* TOOLTIP HOVER CON DATOS EXACTOS */}
                       <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 px-2 py-1 rounded text-xs text-center border border-gray-700 z-10 w-max pointer-events-none shadow-lg">
                         <p className="text-emerald-400 font-bold">Vent: {data.porcentajeVentas.toFixed(1)}%</p>
                         <p className="text-blue-400 font-bold">Util: {data.porcentajeMensual.toFixed(1)}%</p>
                       </div>
 
-                      {/* DOBLE CILINDRO */}
                       <div className="flex gap-1 items-end h-[200px] w-full justify-center">
-                        {/* Cilindro Ventas */}
                         <div className="w-5 bg-gray-900 rounded-t relative border border-gray-700 border-b-0 h-full flex items-end">
                            <div className="w-full shadow-[inset_-2px_0_5px_rgba(0,0,0,0.5)] border-r border-r-black/50 transition-all duration-1000 flex justify-center"
                                 style={{ height: `${alturaVentas}%`, background: 'linear-gradient(to top, #064e3b, #10b981)' }}>
@@ -861,7 +845,6 @@ export default function DashboardApp() {
                            </div>
                         </div>
 
-                        {/* Cilindro Utilidad */}
                         <div className="w-5 bg-gray-900 rounded-t relative border border-gray-700 border-b-0 h-full flex items-end">
                            <div className="w-full shadow-[inset_-2px_0_5px_rgba(0,0,0,0.5)] border-r border-r-black/50 transition-all duration-1000 flex justify-center"
                                 style={{ height: `${alturaUtilidad}%`, background: data.porcentajeMensual >= 100 ? 'linear-gradient(to top, #047857, #34d399)' : 'linear-gradient(to top, #1e3a8a, #3b82f6)' }}>
@@ -870,7 +853,6 @@ export default function DashboardApp() {
                         </div>
                       </div>
 
-                      {/* TEXTO VERTICAL (90 grados exactos, de arriba a abajo) */}
                       <span className="text-[10px] text-gray-400 mt-4 font-bold tracking-widest" 
                             style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', height: '120px', textAlign: 'left' }}>
                         {c.nombre}
