@@ -2,13 +2,13 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.6.0
+// VERSIÓN: v1.6.1
 // FECHA: 19 de Marzo de 2026
 // DESCRIPCIÓN DE CAMBIOS:
-// - NUEVO SEMÁFORO (Opción B): Colores basados en el rendimiento diario esperado de Utilidad.
-//   * Verde: >= 100%, Amarillo: 90% - 99%, Rojo: < 90%.
-// - NUEVA FUNCIÓN: "Cerrar Mes y Reiniciar". Guarda el estado en historial_cierres (JSON)
-//   y reinicia a cero las Ventas y Utilidades acumuladas conservando metas y PINs.
+// - AJUSTE VISUAL (UI): El color del semáforo (Rojo, Amarillo, Verde) ahora domina
+//   toda la tarjeta (cabecera y bordes iluminados).
+// - CORRECCIÓN: Las tarjetas consolidadas ya no son azules por defecto; ahora
+//   heredan el color del semáforo según la suma total de sus metas.
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -49,13 +49,14 @@ interface MensajeConfig {
   color: string;
   bg: string;
   bar: string;
+  cardBorder: string; // Nuevo campo para el borde iluminado de la tarjeta
 }
 
-// NUEVA CONFIGURACIÓN DE COLORES SOLICITADA POR EL USUARIO (Rendimiento Diario)
+// SEMÁFORO ACTUALIZADO: ROJO (<90%), AMARILLO (90-99%), VERDE (>=100%)
 const initialMessagesConfig: MensajeConfig[] = [
-  { id: 1, min: -1000, max: 90, mensaje: "🚨 CRÍTICO: Rendimiento bajo", color: "text-red-400", bg: "bg-red-900/50", bar: "bg-red-500" },
-  { id: 2, min: 90, max: 100, mensaje: "⚠️ ALERTA: A menos del 10% de cumplir", color: "text-yellow-400", bg: "bg-yellow-900/50", bar: "bg-yellow-500" },
-  { id: 3, min: 100, max: 5000, mensaje: "✅ ÉXITO: Meta diaria superada", color: "text-white", bg: "bg-green-600", bar: "bg-green-400" } 
+  { id: 1, min: -1000, max: 90, mensaje: "🚨 CRÍTICO", color: "text-red-400", bg: "bg-red-800", bar: "bg-red-500", cardBorder: "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]" },
+  { id: 2, min: 90, max: 100, mensaje: "⚠️ ALERTA", color: "text-yellow-400", bg: "bg-yellow-600", bar: "bg-yellow-500", cardBorder: "border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)]" },
+  { id: 3, min: 100, max: 5000, mensaje: "✅ ÉXITO", color: "text-white", bg: "bg-green-700", bar: "bg-green-400", cardBorder: "border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)]" } 
 ];
 
 const WhatsAppIcon = () => (
@@ -87,7 +88,6 @@ export default function DashboardApp() {
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showReport, setShowReport] = useState(false);
   
-  // Nuevo Estado para Modal de Cierre de Mes
   const [showCloseMonthModal, setShowCloseMonthModal] = useState(false);
   const [mesACerrar, setMesACerrar] = useState(new Date().toLocaleString('es-CO', { month: 'long' }).toUpperCase());
 
@@ -130,7 +130,6 @@ export default function DashboardApp() {
     const porcentajeMensual = metaU > 0 ? (utilAcumulada / metaU) * 100 : 0;
     const porcentajeVentas = metaV > 0 ? (ventasAcum / metaV) * 100 : 0;
     
-    // Aquí está la clave de tu solicitud: El rendimiento diario es la utilidad real vs lo que debería llevar HOY
     const rendimientoDiario = promedioEsperado > 0 ? (utilAcumulada / promedioEsperado) * 100 : (utilAcumulada > 0 ? 100 : 0);
     
     const faltanteParaCumplir = metaU - utilAcumulada;
@@ -153,8 +152,9 @@ export default function DashboardApp() {
       faltanteVentas,
       mensaje: config.mensaje,
       color: config.color,
-      bg: casino.isConsolidado ? 'bg-indigo-900' : config.bg, // Usa directamente el color del arreglo inicial
+      bg: config.bg, // Ahora TODAS las tarjetas (incluso consolidadas) toman el color del semáforo
       barColor: config.bar,
+      cardBorder: config.cardBorder, // Propiedad que le da color al marco de la tarjeta
       icono: rendimientoDiario < 90 ? <TrendingDown /> : isExitoso ? <CheckCircle /> : <TrendingUp />
     };
   };
@@ -246,18 +246,16 @@ export default function DashboardApp() {
     await supabase.from('app_config').update({ system_pin: newPin }).eq('id', 1);
   };
 
-  // --- NUEVA LÓGICA: CERRAR MES Y GUARDAR HISTORIAL ---
   const handleCerrarMes = async () => {
     const añoActual = new Date().getFullYear();
     const fechaCierreStr = new Date().toISOString();
 
-    // 1. Guardar en historial_cierres
     const { error: errorHistorial } = await supabase.from('historial_cierres').insert([
       { 
         mes: mesACerrar, 
         ano: añoActual, 
         fecha_cierre: fechaCierreStr, 
-        datos_json: casinos // Guarda todo el arreglo como JSON
+        datos_json: casinos 
       }
     ]);
 
@@ -266,19 +264,16 @@ export default function DashboardApp() {
       return;
     }
 
-    // 2. Reiniciar Ventas y Utilidades en 'casinos' a 0
-    // Las promesas se ejecutan en paralelo para mayor velocidad
     const resetPromises = casinos.map(c => 
       supabase.from('casinos').update({ utilidad: 0, ventasAcumuladas: 0, fecha: 'Mes Reiniciado' }).eq('id', c.id)
     );
     
     await Promise.all(resetPromises);
 
-    // 3. Limpieza visual y recarga
     alert(`Mes de ${mesACerrar} cerrado exitosamente. Datos guardados en el historial.`);
     setShowCloseMonthModal(false);
-    setDiaActual(1); // Reiniciar el día del mes
-    fetchSupabaseData(); // Traer la tabla en ceros
+    setDiaActual(1);
+    fetchSupabaseData(); 
   };
 
 
@@ -755,6 +750,7 @@ export default function DashboardApp() {
         </>
       )}
 
+      {/* TARJETAS DE LOCALES */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-12">
         {localesAMostrar.map(casino => {
           const data = evaluarCasino(casino);
@@ -763,7 +759,8 @@ export default function DashboardApp() {
           const rentabilidad = data.ventasAcumuladas > 0 ? (data.utilidad / data.ventasAcumuladas) * 100 : 0;
 
           return (
-            <div key={data.id} className={`bg-gray-800 rounded-2xl border ${data.isConsolidado ? 'border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.3)]' : 'border-gray-700'} overflow-hidden shadow-xl flex flex-col relative`}>
+            // ACÁ ESTÁ EL CAMBIO PRINCIPAL: Se usa `data.cardBorder` que ilumina la tarjeta en rojo, amarillo o verde.
+            <div key={data.id} className={`bg-gray-800 rounded-2xl border-2 ${data.cardBorder} overflow-hidden flex flex-col relative`}>
               
               <div className={`p-4 ${data.bg} border-b border-black/20 relative transition-colors duration-500`}>
                 {!data.isConsolidado && (
@@ -783,7 +780,7 @@ export default function DashboardApp() {
                 </div>
 
                 {data.isConsolidado && (
-                  <p className="text-center text-xs font-bold bg-white/20 inline-block px-3 py-1 rounded-full mx-auto w-max mb-2">⭐ VISTA GLOBAL</p>
+                  <p className="text-center text-xs font-bold bg-white/20 inline-block px-3 py-1 rounded-full mx-auto w-max mb-2 shadow">⭐ VISTA GLOBAL</p>
                 )}
               </div>
 
