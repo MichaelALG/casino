@@ -2,13 +2,14 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.6.1
+// VERSIÓN: v1.7.0
 // FECHA: 19 de Marzo de 2026
+// HORA: 03:00 PM (Aprox)
 // DESCRIPCIÓN DE CAMBIOS:
-// - AJUSTE VISUAL (UI): El color del semáforo (Rojo, Amarillo, Verde) ahora domina
-//   toda la tarjeta (cabecera y bordes iluminados).
-// - CORRECCIÓN: Las tarjetas consolidadas ya no son azules por defecto; ahora
-//   heredan el color del semáforo según la suma total de sus metas.
+// - NUEVO: Gráfica individual en Modal (Meta vs Real) por cada local con botón dedicado.
+// - NUEVO: Panel de edición de mensajes motivacionales y rangos del semáforo.
+// - NUEVO: Sistema de Sub-Administradores (PINs con acceso restringido a casinos específicos).
+// - MEJORA UI: Panel de configuración reorganizado por pestañas.
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -16,8 +17,8 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, 
   Download, User, Shield, Settings, Calendar, 
-  Sigma, KeyRound, LogOut, AlertOctagon, X, Loader2, Smartphone,
-  FileText, BarChart3, Save
+  Sigma, KeyRound, LogOut, X, Smartphone,
+  FileText, BarChart3, Save, BarChart, Users, MessageSquareText
 } from 'lucide-react';
 
 // --- INICIALIZAR SUPABASE ---
@@ -49,14 +50,19 @@ interface MensajeConfig {
   color: string;
   bg: string;
   bar: string;
-  cardBorder: string; // Nuevo campo para el borde iluminado de la tarjeta
+  cardBorder: string;
 }
 
-// SEMÁFORO ACTUALIZADO: ROJO (<90%), AMARILLO (90-99%), VERDE (>=100%)
+interface SubAdmin {
+  id: number;
+  pin: string;
+  casinos: number[]; // IDs de los casinos asignados
+}
+
 const initialMessagesConfig: MensajeConfig[] = [
-  { id: 1, min: -1000, max: 90, mensaje: "🚨 CRÍTICO", color: "text-red-400", bg: "bg-red-800", bar: "bg-red-500", cardBorder: "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]" },
-  { id: 2, min: 90, max: 100, mensaje: "⚠️ ALERTA", color: "text-yellow-400", bg: "bg-yellow-600", bar: "bg-yellow-500", cardBorder: "border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)]" },
-  { id: 3, min: 100, max: 5000, mensaje: "✅ ÉXITO", color: "text-white", bg: "bg-green-700", bar: "bg-green-400", cardBorder: "border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)]" } 
+  { id: 1, min: -1000, max: 90, mensaje: "🚨 CRÍTICO: ¡Aceleren el ritmo!", color: "text-red-400", bg: "bg-red-800", bar: "bg-red-500", cardBorder: "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]" },
+  { id: 2, min: 90, max: 100, mensaje: "⚠️ ALERTA: Faltan pocos clientes", color: "text-yellow-400", bg: "bg-yellow-600", bar: "bg-yellow-500", cardBorder: "border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)]" },
+  { id: 3, min: 100, max: 5000, mensaje: "✅ ÉXITO: ¡Excelente turno!", color: "text-white", bg: "bg-green-700", bar: "bg-green-400", cardBorder: "border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)]" } 
 ];
 
 const WhatsAppIcon = () => (
@@ -74,22 +80,31 @@ export default function DashboardApp() {
   const [systemPin, setSystemPin] = useState('2026');
   const [casinos, setCasinos] = useState<Casino[]>([]);
   const [messagesConfig, setMessagesConfig] = useState<MensajeConfig[]>(initialMessagesConfig);
+  const [subAdmins, setSubAdmins] = useState<SubAdmin[]>([]);
   
-  const [userRole, setUserRole] = useState<'admin' | 'user'>('admin');
+  const [userRole, setUserRole] = useState<'admin' | 'subadmin' | 'user'>('admin');
   const [loggedInUserPin, setLoggedInUserPin] = useState<string>(''); 
+  const [loggedInSubCasinos, setLoggedInSubCasinos] = useState<number[]>([]); 
   
   const [inputs, setInputs] = useState<Record<number, { utilidad: string, ventas: string }>>({}); 
   const [diaActual, setDiaActual] = useState(1);
   const [filtroAdmin, setFiltroAdmin] = useState('TODOS');
+  
+  // States para Configuración
   const [showConfig, setShowConfig] = useState(false);
+  const [configTab, setConfigTab] = useState<'metas' | 'mensajes' | 'subadmins' | 'sistema'>('metas');
   const [configTarget, setConfigTarget] = useState<number | null>(null); 
+  const [newSubPin, setNewSubPin] = useState('');
+  const [newSubCasinos, setNewSubCasinos] = useState<number[]>([]);
+  
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [activeInputId, setActiveInputId] = useState<number | null>(null);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showReport, setShowReport] = useState(false);
-  
   const [showCloseMonthModal, setShowCloseMonthModal] = useState(false);
   const [mesACerrar, setMesACerrar] = useState(new Date().toLocaleString('es-CO', { month: 'long' }).toUpperCase());
+  
+  const [activeGraphCasino, setActiveGraphCasino] = useState<Casino | null>(null);
 
   const fetchSupabaseData = async () => {
     setIsLoading(true);
@@ -108,6 +123,14 @@ export default function DashboardApp() {
     const today = new Date().getDate();
     setDiaActual(today);
     
+    if (typeof window !== 'undefined') {
+      const savedMsgs = localStorage.getItem('casinos_msgs_v17');
+      if (savedMsgs) setMessagesConfig(JSON.parse(savedMsgs));
+      
+      const savedSubs = localStorage.getItem('casinos_subadmins_v17');
+      if (savedSubs) setSubAdmins(JSON.parse(savedSubs));
+    }
+
     fetchSupabaseData();
 
     const channel = supabase.channel('realtime-casinos').on('postgres_changes', { event: '*', schema: 'public', table: 'casinos' }, () => {
@@ -116,6 +139,13 @@ export default function DashboardApp() {
 
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  useEffect(() => {
+    if (isMounted && typeof window !== 'undefined') {
+      localStorage.setItem('casinos_msgs_v17', JSON.stringify(messagesConfig));
+      localStorage.setItem('casinos_subadmins_v17', JSON.stringify(subAdmins));
+    }
+  }, [messagesConfig, subAdmins, isMounted]);
 
   const formatoPesos = (val: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(val);
   const getPromedioEsperado = (meta: number) => (meta / 30) * diaActual;
@@ -129,7 +159,6 @@ export default function DashboardApp() {
     const promedioEsperado = getPromedioEsperado(metaU);
     const porcentajeMensual = metaU > 0 ? (utilAcumulada / metaU) * 100 : 0;
     const porcentajeVentas = metaV > 0 ? (ventasAcum / metaV) * 100 : 0;
-    
     const rendimientoDiario = promedioEsperado > 0 ? (utilAcumulada / promedioEsperado) * 100 : (utilAcumulada > 0 ? 100 : 0);
     
     const faltanteParaCumplir = metaU - utilAcumulada;
@@ -152,9 +181,9 @@ export default function DashboardApp() {
       faltanteVentas,
       mensaje: config.mensaje,
       color: config.color,
-      bg: config.bg, // Ahora TODAS las tarjetas (incluso consolidadas) toman el color del semáforo
+      bg: config.bg, 
       barColor: config.bar,
-      cardBorder: config.cardBorder, // Propiedad que le da color al marco de la tarjeta
+      cardBorder: config.cardBorder, 
       icono: rendimientoDiario < 90 ? <TrendingDown /> : isExitoso ? <CheckCircle /> : <TrendingUp />
     };
   };
@@ -165,6 +194,17 @@ export default function DashboardApp() {
       setIsAuthenticated(true);
       fetchSupabaseData();
     } else {
+      // Verificar si es Sub-Admin
+      const isSubAdmin = subAdmins.find(sa => sa.pin === pinInput);
+      if (isSubAdmin) {
+        setUserRole('subadmin');
+        setLoggedInSubCasinos(isSubAdmin.casinos);
+        setIsAuthenticated(true);
+        fetchSupabaseData();
+        return;
+      }
+      
+      // Verificar si es Usuario Normal
       const existePIN = casinos.some(c => c.pin === pinInput);
       if (existePIN) {
         setUserRole('user');
@@ -182,7 +222,9 @@ export default function DashboardApp() {
     setIsAuthenticated(false);
     setPinInput('');
     setLoggedInUserPin('');
+    setLoggedInSubCasinos([]);
     setShowReport(false);
+    setShowConfig(false);
   };
 
   const openConfirmation = (id: number) => {
@@ -197,13 +239,10 @@ export default function DashboardApp() {
 
   const confirmEntry = async () => {
     if (!activeInputId) return;
-    
     const ventasToAdd = parseFloat(inputs[activeInputId]?.ventas || '0');
     const utilidadToAdd = parseFloat(inputs[activeInputId]?.utilidad || '0');
-    
     const now = new Date();
     const fechaStr = now.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-    
     const casinoActual = casinos.find(c => c.id === activeInputId);
     if (!casinoActual) return;
 
@@ -212,10 +251,7 @@ export default function DashboardApp() {
     const esCero = utilidadToAdd === 0 && ventasToAdd === 0;
 
     setCasinos(prev => prev.map(c => c.id === activeInputId ? { 
-      ...c, 
-      ventasAcumuladas: nuevasVentas,
-      utilidad: nuevaUtilidad, 
-      fecha: fechaStr 
+      ...c, ventasAcumuladas: nuevasVentas, utilidad: nuevaUtilidad, fecha: fechaStr 
     } : c));
     
     setInputs(prev => ({ ...prev, [activeInputId]: { utilidad: '', ventas: '' } }));
@@ -223,27 +259,8 @@ export default function DashboardApp() {
     setActiveInputId(null);
 
     await supabase.from('casinos').update({ 
-      ventasAcumuladas: nuevasVentas,
-      utilidad: nuevaUtilidad, 
-      fecha: fechaStr, 
-      alertaCero: esCero 
+      ventasAcumuladas: nuevasVentas, utilidad: nuevaUtilidad, fecha: fechaStr, alertaCero: esCero 
     }).eq('id', activeInputId);
-  };
-
-  const updateCasinoMeta = async (id: number, field: string, value: any) => {
-    let finalValue: any = value;
-    if (field !== 'pin' && field !== 'nombre' && field !== 'categoria' && field !== 'dia') {
-      finalValue = parseFloat(value) || 0;
-    }
-
-    const updates: any = { [field]: finalValue };
-    setCasinos(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
-    await supabase.from('casinos').update(updates).eq('id', id);
-  };
-
-  const handleSystemPinUpdate = async (newPin: string) => {
-    setSystemPin(newPin);
-    await supabase.from('app_config').update({ system_pin: newPin }).eq('id', 1);
   };
 
   const handleCerrarMes = async () => {
@@ -251,23 +268,14 @@ export default function DashboardApp() {
     const fechaCierreStr = new Date().toISOString();
 
     const { error: errorHistorial } = await supabase.from('historial_cierres').insert([
-      { 
-        mes: mesACerrar, 
-        ano: añoActual, 
-        fecha_cierre: fechaCierreStr, 
-        datos_json: casinos 
-      }
+      { mes: mesACerrar, ano: añoActual, fecha_cierre: fechaCierreStr, datos_json: casinos }
     ]);
 
-    if (errorHistorial) {
-      alert("Error al guardar historial: " + errorHistorial.message);
-      return;
-    }
+    if (errorHistorial) return alert("Error al guardar historial: " + errorHistorial.message);
 
     const resetPromises = casinos.map(c => 
       supabase.from('casinos').update({ utilidad: 0, ventasAcumuladas: 0, fecha: 'Mes Reiniciado' }).eq('id', c.id)
     );
-    
     await Promise.all(resetPromises);
 
     alert(`Mes de ${mesACerrar} cerrado exitosamente. Datos guardados en el historial.`);
@@ -276,7 +284,31 @@ export default function DashboardApp() {
     fetchSupabaseData(); 
   };
 
+  // --- SUB-ADMINISTRADORES ---
+  const toggleSubCasino = (id: number) => {
+    setNewSubCasinos(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+  };
 
+  const addSubAdmin = () => {
+    if (newSubPin.length !== 4) return alert("El PIN debe tener 4 dígitos.");
+    if (newSubCasinos.length === 0) return alert("Selecciona al menos un local.");
+    
+    const newId = Date.now();
+    setSubAdmins([...subAdmins, { id: newId, pin: newSubPin, casinos: newSubCasinos }]);
+    setNewSubPin('');
+    setNewSubCasinos([]);
+  };
+
+  const removeSubAdmin = (id: number) => {
+    setSubAdmins(subAdmins.filter(sa => sa.id !== id));
+  };
+
+  const updateMessageConfig = (id: number, field: string, value: string | number) => {
+    setMessagesConfig(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m));
+  };
+
+
+  // --- FILTROS ---
   const listaFiltradaVisual = casinos.filter(c => {
     if (userRole === 'admin') {
       if (filtroAdmin === 'TODOS') return true;
@@ -285,12 +317,19 @@ export default function DashboardApp() {
       if (filtroAdmin === 'EXITOSOS') return evalC.rendimientoDiario >= 100;
       return c.categoria === filtroAdmin;
     }
+    if (userRole === 'subadmin') {
+       if (!loggedInSubCasinos.includes(c.id)) return false;
+       if (filtroAdmin === 'TODOS') return true;
+       return c.categoria === filtroAdmin; // Subadmins también pueden filtrar
+    }
     return c.pin === loggedInUserPin;
   });
 
   const getCasinosProcesados = () => {
     const gruposPorPin: Record<string, Casino[]> = {};
     listaFiltradaVisual.forEach(c => {
+      // Para evitar agrupar accidentalmente si un sub-admin tiene varios con pines distintos, agrupamos por nombre base o PIN
+      // Simplificamos: Si el usuario es LOCAL, agrupa por PIN. Si es ADMIN/SUBADMIN agrupa solo si los PINs son idénticos.
       if (!gruposPorPin[c.pin]) gruposPorPin[c.pin] = [];
       gruposPorPin[c.pin].push(c);
     });
@@ -338,7 +377,12 @@ export default function DashboardApp() {
   };
 
   const totalesVisuales = calcularTotalesBase(listaFiltradaVisual);
-  const listaTodosLocales = casinos.filter(c => userRole === 'admin' || c.pin === loggedInUserPin);
+  const listaTodosLocales = casinos.filter(c => {
+    if (userRole === 'admin') return true;
+    if (userRole === 'subadmin') return loggedInSubCasinos.includes(c.id);
+    return c.pin === loggedInUserPin;
+  });
+  
   const totalesGenerales = calcularTotalesBase(listaTodosLocales);
   const totalesGambling = calcularTotalesBase(listaTodosLocales.filter(c => c.categoria === 'GAMBLING'));
   const totalesSociedades = calcularTotalesBase(listaTodosLocales.filter(c => c.categoria === 'SOCIEDADES'));
@@ -420,7 +464,7 @@ export default function DashboardApp() {
     );
   }
 
-  if (showReport && userRole === 'admin') {
+  if (showReport && userRole !== 'user') {
     return (
       <div className="min-h-screen bg-gray-100 text-gray-900 p-4 md:p-8 animate-in fade-in duration-300">
          <div className="max-w-5xl mx-auto bg-white p-6 md:p-10 rounded-xl shadow-2xl relative print:shadow-none print:p-0">
@@ -507,22 +551,7 @@ export default function DashboardApp() {
                </div>
             </div>
 
-            <div className="mb-10">
-               <h2 className="text-xl font-bold text-gray-800 border-b-2 border-gray-200 pb-2 mb-4">Análisis Técnico y Comercial</h2>
-               <div className="text-gray-700 leading-relaxed space-y-4 text-justify">
-                 <p>
-                   A la fecha, transitando el <strong>día {diaActual} del mes</strong> (lo que representa un consumo del <strong>{porcentajeTiempo}%</strong> del tiempo proyectado), 
-                   la red de operaciones presenta un rendimiento global de utilidad del <strong>{porcentajeGlobalUtilidad.toFixed(1)}%</strong> frente a la meta establecida.
-                 </p>
-                 <p>
-                   {porcentajeGlobalUtilidad >= porcentajeTiempo 
-                    ? <span className="text-emerald-700 font-bold">🟢 FINANCIERAMENTE POSITIVO: El consolidado demuestra que la red está superando las expectativas matemáticas del ciclo. Se sugiere mantener las estrategias operativas actuales y recompensar el rendimiento de los locales destacados.</span> 
-                    : <span className="text-red-600 font-bold">🔴 ATENCIÓN REQUERIDA: El rendimiento global se encuentra por debajo de la línea de tiempo esperada ({porcentajeTiempo}%). Se requiere implementar estrategias comerciales urgentes, auditar los puntos de venta con alertas críticas y realizar intervenciones técnicas en las máquinas de bajo rendimiento.</span>}
-                 </p>
-               </div>
-            </div>
-
-            <h2 className="text-xl font-bold text-gray-800 border-b-2 border-gray-200 pb-2 mb-4">Desglose de Locales Críticos y Exitosos</h2>
+            <h2 className="text-xl font-bold text-gray-800 border-b-2 border-gray-200 pb-2 mb-4">Desglose de Locales</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse mb-10 min-w-max">
                  <thead>
@@ -564,6 +593,57 @@ export default function DashboardApp() {
     <div className="min-h-screen bg-gray-900 text-white pb-20 p-4 md:p-8">
       {showInstallModal && <InstallModal />}
       
+      {/* MODAL GRÁFICA INDIVIDUAL */}
+      {activeGraphCasino && (
+        <div className="fixed inset-0 bg-black/95 flex flex-col z-[150] p-4 md:p-8 animate-in fade-in zoom-in duration-300">
+           <div className="flex justify-between items-center border-b border-gray-700 pb-4 mb-8">
+              <div>
+                <h2 className="text-3xl font-black text-white uppercase">{activeGraphCasino.nombre}</h2>
+                <p className="text-emerald-400 font-bold">Análisis: Meta vs Total Acumulado (Utilidad)</p>
+              </div>
+              <button onClick={() => setActiveGraphCasino(null)} className="bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white p-3 rounded-xl transition">
+                <X size={32} />
+              </button>
+           </div>
+           
+           <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-12 md:gap-32 w-full max-w-5xl mx-auto">
+              
+              {/* Barra META */}
+              <div className="flex flex-col items-center w-full md:w-1/3">
+                 <div className="text-center mb-6">
+                    <p className="text-xl text-gray-400 font-bold uppercase tracking-widest">Meta Utilidad</p>
+                    <p className="text-4xl font-black text-white">{formatoPesos(activeGraphCasino.metaUtilidad)}</p>
+                 </div>
+                 <div className="w-32 bg-gray-800 rounded-t-xl relative border border-gray-600 border-b-0 flex items-end justify-center" style={{ height: '40vh' }}>
+                     <div className="w-full h-full shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)] border-r-2 border-r-black/50 transition-all duration-1000 bg-gray-600 relative">
+                       <div className="absolute -top-2 w-full h-4 bg-white/20 rounded-[50%]"></div>
+                     </div>
+                 </div>
+              </div>
+
+              {/* Barra ACUMULADO REAL */}
+              <div className="flex flex-col items-center w-full md:w-1/3">
+                 <div className="text-center mb-6">
+                    <p className="text-xl text-blue-400 font-bold uppercase tracking-widest">Acumulado Real</p>
+                    <p className="text-4xl font-black text-blue-400">{formatoPesos(activeGraphCasino.utilidad)}</p>
+                 </div>
+                 <div className="w-32 bg-gray-800 rounded-t-xl relative border border-gray-600 border-b-0 flex items-end justify-center" style={{ height: '40vh' }}>
+                     {/* Matemáticas de la altura: Relativo a la Meta. Si supera, se capea a 120% para que no se salga de la pantalla */}
+                     <div className="w-full shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)] border-r-2 border-r-black/50 transition-all duration-1000 relative"
+                          style={{ 
+                            height: `${Math.min((activeGraphCasino.utilidad / activeGraphCasino.metaUtilidad) * 100, 120)}%`,
+                            background: activeGraphCasino.utilidad >= activeGraphCasino.metaUtilidad ? 'linear-gradient(to top, #047857, #34d399)' : 'linear-gradient(to top, #1e3a8a, #3b82f6)'
+                          }}>
+                       <div className="absolute -top-2 w-full h-4 bg-white/40 rounded-[50%]"></div>
+                     </div>
+                 </div>
+              </div>
+
+           </div>
+        </div>
+      )}
+
+      {/* CONFIRMAR INGRESO */}
       {showConfirmModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-600 w-full max-w-sm text-center">
@@ -582,7 +662,7 @@ export default function DashboardApp() {
         </div>
       )}
 
-      {/* MODAL DE CIERRE DE MES */}
+      {/* CIERRE DE MES */}
       {showCloseMonthModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 p-6 rounded-xl border border-red-500 w-full max-w-sm text-center shadow-[0_0_20px_rgba(239,68,68,0.5)]">
@@ -591,17 +671,10 @@ export default function DashboardApp() {
              <p className="text-gray-400 text-sm mb-4">
                Esta acción guardará una copia de seguridad en el historial y <span className="text-white font-bold underline">borrará las ventas y utilidades</span> actuales para empezar de cero.
              </p>
-             
              <div className="bg-gray-900 p-4 rounded-lg mb-6 border border-gray-700 text-left">
                <label className="text-xs text-gray-500 block mb-1">Mes que estás cerrando:</label>
-               <input 
-                 type="text" 
-                 value={mesACerrar}
-                 onChange={(e) => setMesACerrar(e.target.value)}
-                 className="w-full bg-gray-800 border border-gray-600 p-2 rounded text-white font-bold"
-               />
+               <input type="text" value={mesACerrar} onChange={(e) => setMesACerrar(e.target.value)} className="w-full bg-gray-800 border border-gray-600 p-2 rounded text-white font-bold" />
              </div>
-
              <div className="flex gap-4">
                <button onClick={() => setShowCloseMonthModal(false)} className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded font-bold">Cancelar</button>
                <button onClick={handleCerrarMes} className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 rounded font-bold">Cerrar Mes</button>
@@ -610,7 +683,7 @@ export default function DashboardApp() {
         </div>
       )}
 
-      {/* BARRA DE NAVEGACIÓN */}
+      {/* NAVBAR */}
       <nav className="mb-4 flex flex-col md:flex-row justify-between items-center gap-4 border-b border-gray-700 pb-4">
         <div className="flex items-center gap-3">
           <Shield className="text-emerald-500" size={32} />
@@ -621,17 +694,13 @@ export default function DashboardApp() {
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
-          <button onClick={() => setShowInstallModal(true)} className="flex items-center gap-1 bg-gray-800 text-emerald-400 p-2 rounded-lg text-xs font-bold md:hidden border border-emerald-500/50">
-             <Smartphone size={16} /> Instalar
-          </button>
-
           <div className="flex items-center gap-3 bg-gray-800 p-2 rounded-lg border border-gray-700">
             {userRole === 'admin' ? (
               <span className="text-emerald-400 flex items-center gap-1 text-sm font-bold"><Shield size={16}/> ADMIN</span>
+            ) : userRole === 'subadmin' ? (
+              <span className="text-purple-400 flex items-center gap-1 text-sm font-bold"><Users size={16}/> SUB-ADMIN</span>
             ) : (
-              <span className="text-blue-400 flex items-center gap-1 text-sm font-bold">
-                <User size={16}/> Local
-              </span>
+              <span className="text-blue-400 flex items-center gap-1 text-sm font-bold"><User size={16}/> Local</span>
             )}
             <div className="w-px h-4 bg-gray-600"></div>
             <button onClick={handleLogout} className="text-gray-400 hover:text-red-400 flex items-center gap-1 text-xs">
@@ -647,7 +716,8 @@ export default function DashboardApp() {
         </div>
       </nav>
 
-      {userRole === 'admin' && (
+      {/* PANEL ADMIN Y SUBADMIN */}
+      {(userRole === 'admin' || userRole === 'subadmin') && (
         <>
           <div className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 text-center transition-all duration-300">
@@ -680,71 +750,147 @@ export default function DashboardApp() {
                 <FileText size={14}/> Reporte Financiero
               </button>
               
-              <button onClick={() => setShowInstallModal(true)} className="hidden md:flex items-center gap-1 px-3 py-1 rounded text-xs bg-gray-800 text-emerald-400 border border-emerald-500/50">
-                <Smartphone size={14} /> Instalar
-              </button>
-              <button onClick={() => { setShowConfig(!showConfig); setConfigTarget(null); }} className="flex items-center gap-1 px-3 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 border border-gray-600">
-                <Settings size={14}/> Config
-              </button>
+              {userRole === 'admin' && (
+                <button onClick={() => { setShowConfig(!showConfig); setConfigTarget(null); setConfigTab('metas'); }} className={`flex items-center gap-1 px-4 py-1 rounded text-xs font-bold border transition-colors ${showConfig ? 'bg-white text-gray-900 border-white' : 'bg-gray-700 hover:bg-gray-600 text-white border-gray-600'}`}>
+                  <Settings size={14}/> Configuración
+                </button>
+              )}
               <button onClick={exportarCSV} className="flex items-center gap-1 px-4 py-1 rounded text-xs bg-emerald-600 hover:bg-emerald-500 font-semibold">
                 <Download size={14}/> CSV
               </button>
             </div>
           </div>
 
-          {showConfig && (
-            <div className="mb-6 bg-gray-800 p-6 rounded-xl border border-emerald-500/50 shadow-lg relative">
-              <button onClick={() => setShowConfig(false)} className="absolute top-4 right-4 bg-red-600/20 text-red-400 flex items-center gap-1 px-3 py-1 rounded">
-                <X size={16} /> Cerrar
+          {/* PANEL CONFIGURADOR (SOLO ADMIN) */}
+          {showConfig && userRole === 'admin' && (
+            <div className="mb-6 bg-gray-800 p-6 rounded-xl border border-emerald-500/50 shadow-lg relative animate-in slide-in-from-top-4 duration-300">
+              <button onClick={() => setShowConfig(false)} className="absolute top-4 right-4 bg-red-600/20 text-red-400 flex items-center gap-1 px-3 py-1 rounded hover:bg-red-600 hover:text-white transition">
+                <X size={16} /> Cerrar Config
               </button>
-              <div className="grid md:grid-cols-2 gap-8">
-                <div>
-                  <h3 className="text-lg font-bold mb-4 border-b border-gray-700 pb-2"><Sigma size={18} className="inline"/> Configurar Metas y PINs</h3>
-                  <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                    {casinos.map(c => (
-                      <div key={c.id} onClick={() => setConfigTarget(c.id)} className={`p-2 rounded cursor-pointer ${configTarget === c.id ? 'bg-emerald-900/50 border border-emerald-500' : 'bg-gray-700 hover:bg-gray-600'}`}>
-                        <div className="flex justify-between items-center">
-                          <p className="font-semibold text-sm">{c.nombre}</p>
-                          <span className="text-xs bg-gray-900 px-2 py-1 rounded text-gray-400">PIN: {c.pin}</span>
-                        </div>
-                        {configTarget === c.id && (
-                          <div className="grid grid-cols-2 gap-2 mt-3" onClick={e => e.stopPropagation()}>
-                            <div className="col-span-2">
-                              <label className="text-xs text-gray-400">PIN de Acceso Local</label>
-                              <input type="text" maxLength={4} value={c.pin} onChange={e => updateCasinoMeta(c.id, 'pin', e.target.value.replace(/\D/g, ''))} className="w-full bg-gray-900 p-1 rounded text-sm text-center" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-400">Meta Ventas</label>
-                              <input type="number" value={c.metaMensual} onChange={e => updateCasinoMeta(c.id, 'metaMensual', e.target.value)} className="w-full bg-gray-900 p-1 rounded text-sm text-white" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-400">Meta Utilidad</label>
-                              <input type="number" value={c.metaUtilidad} onChange={e => updateCasinoMeta(c.id, 'metaUtilidad', e.target.value)} className="w-full bg-gray-900 p-1 rounded text-sm text-white" />
-                            </div>
-                          </div>
-                        )}
+              
+              {/* PESTAÑAS */}
+              <div className="flex gap-2 mb-6 border-b border-gray-700 pb-2 overflow-x-auto">
+                 <button onClick={() => setConfigTab('metas')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 ${configTab === 'metas' ? 'bg-emerald-900/50 text-emerald-400 border-b-2 border-emerald-500' : 'text-gray-400 hover:text-white'}`}><Sigma size={16}/> Metas y Locales</button>
+                 <button onClick={() => setConfigTab('mensajes')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 ${configTab === 'mensajes' ? 'bg-yellow-900/50 text-yellow-400 border-b-2 border-yellow-500' : 'text-gray-400 hover:text-white'}`}><MessageSquareText size={16}/> Motivación y Semáforo</button>
+                 <button onClick={() => setConfigTab('subadmins')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 ${configTab === 'subadmins' ? 'bg-purple-900/50 text-purple-400 border-b-2 border-purple-500' : 'text-gray-400 hover:text-white'}`}><Users size={16}/> Sub-Administradores</button>
+                 <button onClick={() => setConfigTab('sistema')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 ${configTab === 'sistema' ? 'bg-blue-900/50 text-blue-400 border-b-2 border-blue-500' : 'text-gray-400 hover:text-white'}`}><KeyRound size={16}/> Sistema y Cierre</button>
+              </div>
+
+              {/* CONTENIDO PESTAÑAS */}
+              {configTab === 'metas' && (
+                <div className="space-y-2 max-h-80 overflow-y-auto pr-2 grid md:grid-cols-2 gap-4">
+                  {casinos.map(c => (
+                    <div key={c.id} onClick={() => setConfigTarget(c.id)} className={`p-3 rounded cursor-pointer border ${configTarget === c.id ? 'bg-emerald-900/50 border-emerald-500' : 'bg-gray-700 hover:bg-gray-600 border-transparent'}`}>
+                      <div className="flex justify-between items-center">
+                        <p className="font-bold text-sm text-white">{c.nombre}</p>
+                        <span className="text-xs bg-gray-900 px-2 py-1 rounded text-gray-400">PIN: {c.pin}</span>
                       </div>
-                    ))}
-                  </div>
+                      {configTarget === c.id && (
+                        <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-600" onClick={e => e.stopPropagation()}>
+                          <div className="col-span-2">
+                            <label className="text-xs text-gray-400">PIN de Acceso Local</label>
+                            <input type="text" maxLength={4} value={c.pin} onChange={e => updateCasinoMeta(c.id, 'pin', e.target.value.replace(/\D/g, ''))} className="w-full bg-gray-900 p-2 rounded text-sm text-center font-bold" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-400">Meta Ventas</label>
+                            <input type="number" value={c.metaMensual} onChange={e => updateCasinoMeta(c.id, 'metaMensual', e.target.value)} className="w-full bg-gray-900 p-2 rounded text-sm text-white font-bold" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-400">Meta Utilidad</label>
+                            <input type="number" value={c.metaUtilidad} onChange={e => updateCasinoMeta(c.id, 'metaUtilidad', e.target.value)} className="w-full bg-gray-900 p-2 rounded text-sm text-white font-bold" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                <div>
-                   <h3 className="text-lg font-bold mb-4 border-b border-gray-700 pb-2 flex items-center gap-2"><KeyRound size={18}/> Seguridad y Datos</h3>
-                   <div className="space-y-4">
-                     <div className="bg-gray-700 p-3 rounded border border-emerald-500/30">
-                       <label className="text-xs text-gray-400 block mb-1">Cambiar PIN Administrador</label>
-                       <input type="password" value={systemPin} onChange={e => handleSystemPinUpdate(e.target.value.replace(/\D/g, '').slice(0,4))} className="w-full bg-gray-900 p-2 rounded text-lg tracking-widest text-center text-emerald-400" />
-                     </div>
+              )}
+
+              {configTab === 'mensajes' && (
+                <div className="space-y-6">
+                  <p className="text-sm text-gray-400">Edita los rangos de porcentaje (Rendimiento Diario) y el mensaje que verá el personal de cada local en su pantalla.</p>
+                  {messagesConfig.map(msg => (
+                    <div key={msg.id} className="bg-gray-700 p-4 rounded-xl border border-gray-600">
+                       <div className="flex gap-4 mb-3 items-center">
+                         <div className={`w-4 h-4 rounded-full ${msg.id === 1 ? 'bg-red-500' : msg.id === 2 ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
+                         <h4 className="font-bold text-white text-sm">Rango {msg.id === 1 ? 'Crítico' : msg.id === 2 ? 'Alerta' : 'Éxito'}</h4>
+                       </div>
+                       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div>
+                            <label className="text-xs text-gray-400">Mínimo %</label>
+                            <input type="number" value={msg.min} onChange={e => updateMessageConfig(msg.id, 'min', Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded text-white font-bold" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-400">Máximo %</label>
+                            <input type="number" value={msg.max} onChange={e => updateMessageConfig(msg.id, 'max', Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded text-white font-bold" />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="text-xs text-gray-400">Texto Motivacional / Alerta</label>
+                            <input type="text" value={msg.mensaje} onChange={e => updateMessageConfig(msg.id, 'mensaje', e.target.value)} className="w-full bg-gray-900 p-2 rounded text-white font-bold" />
+                          </div>
+                       </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {configTab === 'subadmins' && (
+                <div className="grid md:grid-cols-2 gap-8">
+                   <div>
+                     <h4 className="font-bold text-purple-400 mb-4 border-b border-gray-700 pb-2">Crear Nuevo Sub-Administrador</h4>
+                     <label className="text-xs text-gray-400 block mb-1">Nuevo PIN (4 Dígitos)</label>
+                     <input type="text" maxLength={4} value={newSubPin} onChange={e => setNewSubPin(e.target.value.replace(/\D/g, ''))} className="w-full bg-gray-900 p-2 rounded text-center text-xl tracking-[1em] mb-4 text-white" placeholder="****"/>
                      
-                     <div className="bg-red-900/20 p-4 rounded border border-red-500/30 text-center">
-                       <h4 className="font-bold text-red-400 text-sm mb-2">Cierre Financiero</h4>
-                       <p className="text-xs text-gray-400 mb-3">Guarda la data actual en el historial y reinicia ventas y utilidades a $0 para empezar un mes nuevo.</p>
-                       <button onClick={() => setShowCloseMonthModal(true)} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded text-sm flex items-center justify-center gap-2 transition">
-                         <Save size={16}/> Cerrar Mes y Reiniciar
-                       </button>
+                     <label className="text-xs text-gray-400 block mb-2">Asignar Locales (Selecciona varios):</label>
+                     <div className="bg-gray-900 p-3 rounded max-h-40 overflow-y-auto mb-4 border border-gray-700 space-y-2">
+                        {casinos.map(c => (
+                          <label key={c.id} className="flex items-center gap-2 cursor-pointer text-sm hover:bg-gray-800 p-1 rounded">
+                             <input type="checkbox" checked={newSubCasinos.includes(c.id)} onChange={() => toggleSubCasino(c.id)} className="w-4 h-4 accent-purple-500" />
+                             {c.nombre}
+                          </label>
+                        ))}
                      </div>
+                     <button onClick={addSubAdmin} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded transition">Crear Sub-Admin</button>
+                   </div>
+
+                   <div>
+                     <h4 className="font-bold text-white mb-4 border-b border-gray-700 pb-2">Sub-Administradores Activos</h4>
+                     {subAdmins.length === 0 ? (
+                       <p className="text-sm text-gray-500 italic">No hay sub-administradores creados.</p>
+                     ) : (
+                       <div className="space-y-3 max-h-64 overflow-y-auto">
+                         {subAdmins.map(sa => (
+                           <div key={sa.id} className="bg-gray-700 p-3 rounded border border-gray-600 flex justify-between items-center">
+                              <div>
+                                <p className="font-bold text-purple-400 tracking-widest">PIN: {sa.pin}</p>
+                                <p className="text-xs text-gray-400">{sa.casinos.length} locales asignados</p>
+                              </div>
+                              <button onClick={() => removeSubAdmin(sa.id)} className="bg-red-600/20 text-red-400 p-2 rounded hover:bg-red-600 hover:text-white transition"><X size={16}/></button>
+                           </div>
+                         ))}
+                       </div>
+                     )}
                    </div>
                 </div>
-              </div>
+              )}
+
+              {configTab === 'sistema' && (
+                <div className="grid md:grid-cols-2 gap-8">
+                   <div className="bg-gray-700 p-6 rounded-xl border border-blue-500/30">
+                     <h4 className="font-bold text-blue-400 mb-2 flex items-center gap-2"><KeyRound size={18}/> Master PIN</h4>
+                     <label className="text-xs text-gray-400 block mb-2">Cambiar clave del Administrador Principal</label>
+                     <input type="password" value={systemPin} onChange={e => handleSystemPinUpdate(e.target.value.replace(/\D/g, '').slice(0,4))} className="w-full bg-gray-900 p-3 rounded text-2xl tracking-[1em] text-center text-blue-400 focus:outline-none focus:border-blue-500 border border-transparent" />
+                   </div>
+                   
+                   <div className="bg-red-900/20 p-6 rounded-xl border border-red-500/30 text-center flex flex-col justify-center">
+                     <h4 className="font-bold text-red-400 text-lg mb-2 flex items-center justify-center gap-2"><Save size={20}/> Cierre Financiero</h4>
+                     <p className="text-xs text-gray-400 mb-4">Guarda la data en el Historial DB y reinicia ventas y utilidades a $0 conservando las metas establecidas.</p>
+                     <button onClick={() => setShowCloseMonthModal(true)} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-lg text-sm flex items-center justify-center gap-2 transition shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                       Cerrar Mes y Reiniciar
+                     </button>
+                   </div>
+                </div>
+              )}
             </div>
           )}
         </>
@@ -755,18 +901,22 @@ export default function DashboardApp() {
         {localesAMostrar.map(casino => {
           const data = evaluarCasino(casino);
           const porcentajeTiempo = Math.round((diaActual / 30) * 100);
-          
           const rentabilidad = data.ventasAcumuladas > 0 ? (data.utilidad / data.ventasAcumuladas) * 100 : 0;
 
           return (
-            // ACÁ ESTÁ EL CAMBIO PRINCIPAL: Se usa `data.cardBorder` que ilumina la tarjeta en rojo, amarillo o verde.
             <div key={data.id} className={`bg-gray-800 rounded-2xl border-2 ${data.cardBorder} overflow-hidden flex flex-col relative`}>
               
               <div className={`p-4 ${data.bg} border-b border-black/20 relative transition-colors duration-500`}>
                 {!data.isConsolidado && (
                   <img src="https://z-cdn-media.chatglm.cn/files/9a8f0b6a-4eb0-4355-958e-f0eba195dc97.png?auth_key=1873295030-16af9abaa2f147b5b6f8ada3e9491b35-0-ce3104328fea8a435aa665bd9b5b7482" alt="Logo" className="absolute top-2 left-2 w-10 h-10 rounded-full border-2 border-white shadow-md object-cover opacity-90"/>
                 )}
-                <div className={`flex justify-between items-center ${!data.isConsolidado ? 'ml-12' : ''}`}>
+                
+                {/* BOTÓN NUEVO: ABRIR GRÁFICA MODAL */}
+                <button onClick={() => setActiveGraphCasino(data)} className="absolute top-2 right-2 bg-white/20 hover:bg-white/40 text-white p-2 rounded-lg transition backdrop-blur-sm">
+                  <BarChart size={20} />
+                </button>
+
+                <div className={`flex justify-between items-center ${!data.isConsolidado ? 'ml-12' : ''} mr-10`}>
                   <span className="text-[10px] font-bold bg-black/20 px-2 py-1 rounded uppercase tracking-wider">{data.categoria}</span>
                   <span className="text-xs font-bold text-white/70">{data.fecha || 'Sin cierres'}</span>
                 </div>
@@ -784,150 +934,111 @@ export default function DashboardApp() {
                 )}
               </div>
 
-              <div className="p-6 flex-grow">
+              <div className="p-6 flex-grow flex flex-col justify-between">
                 
-                <div className="grid grid-cols-2 gap-3 text-sm mb-2">
-                  <div>
-                    <p className="text-gray-400 text-[11px] uppercase">Meta de Ventas</p>
-                    <p className="font-bold text-white">{formatoPesos(data.metaMensual)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-gray-400 text-[11px] uppercase">Acumulado Ventas</p>
-                    <p className="font-bold text-emerald-400 text-lg">{formatoPesos(data.ventasAcumuladas)}</p>
-                  </div>
-                </div>
-
-                <div className="flex justify-end text-[10px] text-gray-400 px-1 mb-6 mt-1 text-right">
-                  <span>Falta para ventas: <span className={`font-bold ${data.faltanteVentas <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteVentas))}</span></span>
-                </div>
-                
-                <div className="h-2 bg-gray-900 rounded-full relative mb-5">
-                   <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
-                     <span className="text-emerald-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-emerald-500/30 whitespace-nowrap shadow-lg">
-                       Logro Ventas: {data.porcentajeVentas.toFixed(1)}%
-                     </span>
-                     <div className="w-1 h-5 bg-emerald-500 rounded"></div>
-                   </div>
-                   <div className="h-full bg-emerald-500 transition-all duration-1000 rounded-full" style={{ width: `${Math.min(data.porcentajeVentas, 100)}%` }}></div>
-                </div>
-
-                <div className="border-t border-gray-700 my-4"></div>
-
-                <div className="grid grid-cols-2 gap-3 text-sm mb-2">
-                  <div>
-                    <p className="text-gray-400 text-[11px] uppercase">Meta Utilidad</p>
-                    <p className="font-bold text-blue-400">{formatoPesos(data.metaUtilidad)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-gray-400 text-[11px] uppercase">Total Acumulado</p>
-                    <p className="font-bold text-white text-lg">{formatoPesos(data.utilidad)}</p>
-                  </div>
-                </div>
-
-                <div className="flex justify-between text-[11px] px-1 mb-6 mt-1">
-                  <span className="text-gray-400">Deberías llevar: <span className="text-blue-300 font-bold">{formatoPesos(data.promedioEsperado)}</span></span>
-                  <span className="text-gray-400 text-right">Falta cumplir: <span className={`font-bold ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span></span>
-                </div>
-
-                <div className="h-2 bg-gray-900 rounded-full relative mb-6">
-                  <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
-                    <span className="text-blue-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-blue-500/30 whitespace-nowrap shadow-lg">
-                      Logro Utilidad: {data.porcentajeMensual.toFixed(1)}% | Día {diaActual}
-                    </span>
-                    <div className="w-1 h-5 bg-blue-500 rounded"></div>
-                  </div>
-                  <div className={`h-full ${data.barColor} transition-all duration-1000 rounded-full`} style={{ width: `${Math.min(data.porcentajeMensual, 100)}%` }}></div>
-                </div>
-
-                {!data.isConsolidado && (
-                  <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-600 mt-2">
-                    <label className="text-[10px] text-emerald-400 font-bold uppercase block mb-3 text-center">Cierre de Turno</label>
-                    
-                    <div className="space-y-2 mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400 w-16">Ventas:</span>
-                        <input
-                          type="number" placeholder="$ Ingresar Ventas"
-                          className="flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:border-emerald-500 text-sm"
-                          value={inputs[data.id]?.ventas || ''}
-                          onChange={(e) => setInputs((prev) => ({ ...prev, [data.id]: { ...prev[data.id], ventas: e.target.value } }))}
-                        />
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400 w-16">Utilidad:</span>
-                        <input
-                          type="number" placeholder="$ Ingresar Utilidad"
-                          className="flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 text-sm"
-                          value={inputs[data.id]?.utilidad || ''}
-                          onChange={(e) => setInputs((prev) => ({ ...prev, [data.id]: { ...prev[data.id], utilidad: e.target.value } }))}
-                        />
-                      </div>
+                <div>
+                  <div className="grid grid-cols-2 gap-3 text-sm mb-2">
+                    <div>
+                      <p className="text-gray-400 text-[11px] uppercase">Meta de Ventas</p>
+                      <p className="font-bold text-white">{formatoPesos(data.metaMensual)}</p>
                     </div>
-
-                    <button 
-                      onClick={() => openConfirmation(data.id)}
-                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition shadow-lg"
-                    >
-                      Guardar Datos del Turno
-                    </button>
+                    <div className="text-right">
+                      <p className="text-gray-400 text-[11px] uppercase">Acumulado Ventas</p>
+                      <p className="font-bold text-emerald-400 text-lg">{formatoPesos(data.ventasAcumuladas)}</p>
+                    </div>
                   </div>
-                )}
+
+                  <div className="flex justify-end text-[10px] text-gray-400 px-1 mb-6 mt-1 text-right">
+                    <span>Falta para ventas: <span className={`font-bold ${data.faltanteVentas <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteVentas))}</span></span>
+                  </div>
+                  
+                  <div className="h-2 bg-gray-900 rounded-full relative mb-5">
+                     <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
+                       <span className="text-emerald-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-emerald-500/30 whitespace-nowrap shadow-lg">
+                         Logro Ventas: {data.porcentajeVentas.toFixed(1)}%
+                       </span>
+                       <div className="w-1 h-5 bg-emerald-500 rounded"></div>
+                     </div>
+                     <div className="h-full bg-emerald-500 transition-all duration-1000 rounded-full" style={{ width: `${Math.min(data.porcentajeVentas, 100)}%` }}></div>
+                  </div>
+
+                  <div className="border-t border-gray-700 my-4"></div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm mb-2">
+                    <div>
+                      <p className="text-gray-400 text-[11px] uppercase">Meta Utilidad</p>
+                      <p className="font-bold text-blue-400">{formatoPesos(data.metaUtilidad)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-gray-400 text-[11px] uppercase">Total Acumulado</p>
+                      <p className="font-bold text-white text-lg">{formatoPesos(data.utilidad)}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between text-[11px] px-1 mb-6 mt-1">
+                    <span className="text-gray-400">Deberías llevar: <span className="text-blue-300 font-bold">{formatoPesos(data.promedioEsperado)}</span></span>
+                    <span className="text-gray-400 text-right">Falta cumplir: <span className={`font-bold ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span></span>
+                  </div>
+
+                  <div className="h-2 bg-gray-900 rounded-full relative mb-6">
+                    <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
+                      <span className="text-blue-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-blue-500/30 whitespace-nowrap shadow-lg">
+                        Logro Utilidad: {data.porcentajeMensual.toFixed(1)}% | Día {diaActual}
+                      </span>
+                      <div className="w-1 h-5 bg-blue-500 rounded"></div>
+                    </div>
+                    <div className={`h-full ${data.barColor} transition-all duration-1000 rounded-full`} style={{ width: `${Math.min(data.porcentajeMensual, 100)}%` }}></div>
+                  </div>
+                </div>
+
+                {/* MENSAJE MOTIVACIONAL Y DOBLE INGRESO DE DATOS */}
+                <div className="mt-4">
+                  {/* TEXTO MOTIVACIONAL DEL SEMÁFORO */}
+                  <div className={`flex items-center justify-center gap-2 p-3 rounded-lg mb-4 bg-gray-900 border ${data.cardBorder}`}>
+                    {data.icono}
+                    <span className={`text-xs font-bold ${data.color} text-center`}>{data.mensaje}</span>
+                  </div>
+
+                  {!data.isConsolidado && (
+                    <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-600">
+                      <label className="text-[10px] text-emerald-400 font-bold uppercase block mb-3 text-center">Cierre de Turno</label>
+                      
+                      <div className="space-y-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-16">Ventas:</span>
+                          <input
+                            type="number" placeholder="$ Ingresar Ventas"
+                            className="flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:border-emerald-500 text-sm"
+                            value={inputs[data.id]?.ventas || ''}
+                            onChange={(e) => setInputs((prev) => ({ ...prev, [data.id]: { ...prev[data.id], ventas: e.target.value } }))}
+                          />
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-16">Utilidad:</span>
+                          <input
+                            type="number" placeholder="$ Ingresar Utilidad"
+                            className="flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 text-sm"
+                            value={inputs[data.id]?.utilidad || ''}
+                            onChange={(e) => setInputs((prev) => ({ ...prev, [data.id]: { ...prev[data.id], utilidad: e.target.value } }))}
+                          />
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={() => openConfirmation(data.id)}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition shadow-lg"
+                      >
+                        Guardar Datos del Turno
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           );
         })}
       </div>
-
-      {userRole === 'admin' && (
-        <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-2xl mb-8">
-           <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-             <BarChart3 className="text-blue-400"/> Comparativo: Ventas vs Utilidad
-           </h3>
-           <div className="flex gap-4 mb-6 border-b border-gray-700 pb-2 text-xs font-bold">
-             <span className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-500 rounded"></div> Ventas Reales</span>
-             <span className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-500 rounded"></div> Utilidad Real</span>
-           </div>
-
-           <div className="flex items-end h-[400px] gap-6 overflow-x-auto pb-6 pt-10 scrollbar-thin scrollbar-thumb-gray-600">
-              {localesAMostrar.filter(c => !c.isConsolidado).map(c => {
-                 const data = evaluarCasino(c);
-                 const alturaUtilidad = Math.min(data.porcentajeMensual, 120); 
-                 const alturaVentas = Math.min(data.porcentajeVentas, 120); 
-                 return (
-                   <div key={c.id} className="w-16 flex flex-col items-center flex-shrink-0 group relative h-full justify-end">
-                      
-                      <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 px-2 py-1 rounded text-xs text-center border border-gray-700 z-10 w-max pointer-events-none shadow-lg">
-                        <p className="text-emerald-400 font-bold">Vent: {data.porcentajeVentas.toFixed(1)}%</p>
-                        <p className="text-blue-400 font-bold">Util: {data.porcentajeMensual.toFixed(1)}%</p>
-                      </div>
-
-                      <div className="flex gap-1 items-end h-[200px] w-full justify-center">
-                        <div className="w-5 bg-gray-900 rounded-t relative border border-gray-700 border-b-0 h-full flex items-end">
-                           <div className="w-full shadow-[inset_-2px_0_5px_rgba(0,0,0,0.5)] border-r border-r-black/50 transition-all duration-1000 flex justify-center"
-                                style={{ height: `${alturaVentas}%`, background: 'linear-gradient(to top, #064e3b, #10b981)' }}>
-                             <div className="absolute -top-1 w-full h-2 bg-white/40 rounded-[50%]"></div>
-                           </div>
-                        </div>
-
-                        <div className="w-5 bg-gray-900 rounded-t relative border border-gray-700 border-b-0 h-full flex items-end">
-                           <div className="w-full shadow-[inset_-2px_0_5px_rgba(0,0,0,0.5)] border-r border-r-black/50 transition-all duration-1000 flex justify-center"
-                                style={{ height: `${alturaUtilidad}%`, background: data.porcentajeMensual >= 100 ? 'linear-gradient(to top, #047857, #34d399)' : 'linear-gradient(to top, #1e3a8a, #3b82f6)' }}>
-                             <div className="absolute -top-1 w-full h-2 bg-white/40 rounded-[50%]"></div>
-                           </div>
-                        </div>
-                      </div>
-
-                      <span className="text-[10px] text-gray-400 mt-4 font-bold tracking-widest" 
-                            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', height: '120px', textAlign: 'left' }}>
-                        {c.nombre}
-                      </span>
-                   </div>
-                 )
-              })}
-           </div>
-        </div>
-      )}
       
       <footer className="fixed bottom-0 left-0 right-0 bg-gray-950 border-t border-gray-800 p-4 text-center z-40">
         <div className="flex flex-col md:flex-row justify-center items-center gap-2 text-[10px] text-gray-500 font-bold uppercase tracking-widest">
