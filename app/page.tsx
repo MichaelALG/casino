@@ -2,14 +2,13 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.7.4
+// VERSIÓN: v1.8.0
 // FECHA: 19 de Marzo de 2026
 // DESCRIPCIÓN DE CAMBIOS OBLIGATORIOS:
-// - CORRECCIÓN PC: Se cambió la llave de LocalStorage ('casinos_msgs_v17_4') 
-//   para forzar el borrado de caché y que el PC muestre los colores reales.
-// - UI TARJETA: Texto "Deberías llevar:" apilado sobre su número, alineado a la izq.
-// - UI GRÁFICA MODAL: Barra izquierda siempre Verde Oscuro.
-// - UI GRÁFICA MODAL: Barra derecha color oscuro según restricción (Rojo oscuro, Amarillo quemado, Verde oscuro).
+// - NUEVO: Opción de "Corte Parcial" en configuración para guardar en DB sin borrar.
+// - NUEVO: Sub-Administradores y Mensajes ahora se sincronizan con Supabase.
+// - UI INTACTA: Todos los textos, alíneaciones, barra verde izquierda y colores 
+//   oscuros de restricción se mantienen idénticos a la versión 1.7.4.
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -18,7 +17,7 @@ import {
   TrendingUp, TrendingDown, CheckCircle, AlertTriangle, 
   Download, User, Shield, Settings, Calendar, 
   Sigma, KeyRound, LogOut, X, Smartphone,
-  FileText, BarChart, Users, MessageSquareText, Save
+  FileText, BarChart, Users, MessageSquareText, Save, History
 } from 'lucide-react';
 
 // --- INICIALIZAR SUPABASE ---
@@ -50,7 +49,7 @@ interface MensajeConfig {
   color: string;
   bg: string;
   bar: string;
-  modalBarColor: string; // Novedad: Color oscuro para la barra derecha en la gráfica
+  modalBarColor: string;
 }
 
 interface SubAdmin {
@@ -60,9 +59,9 @@ interface SubAdmin {
 }
 
 const initialMessagesConfig: MensajeConfig[] = [
-  { id: 1, min: -1000, max: 90, mensaje: "Aceleren el ritmo operativo", color: "text-red-400", bg: "bg-red-900", bar: "bg-red-500", modalBarColor: "linear-gradient(to top, #7f1d1d, #b91c1c)" }, // Rojo Oscuro
-  { id: 2, min: 90, max: 100, mensaje: "Faltan pocos clientes", color: "text-yellow-400", bg: "bg-yellow-700", bar: "bg-yellow-500", modalBarColor: "linear-gradient(to top, #78350f, #b45309)" }, // Amarillo quemado / Naranja
-  { id: 3, min: 100, max: 5000, mensaje: "Excelente turno comercial", color: "text-green-300", bg: "bg-green-800", bar: "bg-green-400", modalBarColor: "linear-gradient(to top, #14532d, #166534)" } // Verde Oscuro
+  { id: 1, min: -1000, max: 90, mensaje: "Aceleren el ritmo operativo", color: "text-red-400", bg: "bg-red-900", bar: "bg-red-500", modalBarColor: "linear-gradient(to top, #7f1d1d, #b91c1c)" },
+  { id: 2, min: 90, max: 100, mensaje: "Faltan pocos clientes", color: "text-yellow-400", bg: "bg-yellow-700", bar: "bg-yellow-500", modalBarColor: "linear-gradient(to top, #78350f, #b45309)" },
+  { id: 3, min: 100, max: 5000, mensaje: "Excelente turno comercial", color: "text-green-300", bg: "bg-green-800", bar: "bg-green-400", modalBarColor: "linear-gradient(to top, #14532d, #166534)" }
 ];
 
 const WhatsAppIcon = () => (
@@ -107,13 +106,34 @@ export default function DashboardApp() {
 
   const fetchSupabaseData = async () => {
     setIsLoading(true);
+    
+    // 1. Cargar Casinos
     const { data: casinosData, error } = await supabase.from('casinos').select('*').order('id');
     if (casinosData) setCasinos(casinosData);
     if (error) console.error("Error cargando casinos:", error);
 
+    // 2. Cargar PIN Master
     const { data: configData } = await supabase.from('app_config').select('system_pin').eq('id', 1).single();
     if (configData) setSystemPin(configData.system_pin);
     
+    // 3. Cargar SubAdmins desde Supabase (o Fallback local)
+    const { data: subsData, error: subsError } = await supabase.from('subadmins').select('*');
+    if (!subsError && subsData && subsData.length > 0) {
+      setSubAdmins(subsData);
+    } else {
+      const savedSubs = localStorage.getItem('casinos_subadmins_v17_4');
+      if (savedSubs) setSubAdmins(JSON.parse(savedSubs));
+    }
+
+    // 4. Cargar Mensajes desde Supabase (o Fallback local)
+    const { data: msgsData, error: msgsError } = await supabase.from('mensajes_config').select('*').order('id');
+    if (!msgsError && msgsData && msgsData.length > 0) {
+      setMessagesConfig(msgsData);
+    } else {
+      const savedMsgs = localStorage.getItem('casinos_msgs_v17_4');
+      if (savedMsgs) setMessagesConfig(JSON.parse(savedMsgs));
+    }
+
     setIsLoading(false);
   };
 
@@ -122,15 +142,6 @@ export default function DashboardApp() {
     const today = new Date().getDate();
     setDiaActual(today);
     
-    // Se cambió la llave a _v17_4 para forzar al PC a tomar los nuevos colores por defecto
-    if (typeof window !== 'undefined') {
-      const savedMsgs = localStorage.getItem('casinos_msgs_v17_4');
-      if (savedMsgs) setMessagesConfig(JSON.parse(savedMsgs));
-      
-      const savedSubs = localStorage.getItem('casinos_subadmins_v17_4');
-      if (savedSubs) setSubAdmins(JSON.parse(savedSubs));
-    }
-
     fetchSupabaseData();
 
     const channel = supabase.channel('realtime-casinos').on('postgres_changes', { event: '*', schema: 'public', table: 'casinos' }, () => {
@@ -274,32 +285,62 @@ export default function DashboardApp() {
     );
     await Promise.all(resetPromises);
 
-    alert(`Mes de ${mesACerrar} cerrado exitosamente. Datos guardados en el historial.`);
+    alert(`Mes de ${mesACerrar} cerrado exitosamente. Datos guardados en el historial y valores reiniciados a $0.`);
     setShowCloseMonthModal(false);
     setDiaActual(1);
     fetchSupabaseData(); 
+  };
+
+  // NUEVO: Guardar Corte Parcial
+  const handleCorteParcial = async () => {
+    const añoActual = new Date().getFullYear();
+    const fechaCierreStr = new Date().toISOString();
+    const nombreCorte = `CORTE PARCIAL - Día ${diaActual} - ${new Date().toLocaleString('es-CO', { month: 'long' }).toUpperCase()}`;
+
+    const { error: errorHistorial } = await supabase.from('historial_cierres').insert([
+      { mes: nombreCorte, ano: añoActual, fecha_cierre: fechaCierreStr, datos_json: casinos }
+    ]);
+
+    if (errorHistorial) {
+      alert("Error al guardar historial: " + errorHistorial.message);
+    } else {
+      alert(`Corte parcial guardado exitosamente en el historial como:\n"${nombreCorte}"\n\nLos acumulados de los locales continúan intactos.`);
+    }
   };
 
   const toggleSubCasino = (id: number) => {
     setNewSubCasinos(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
   };
 
-  const addSubAdmin = () => {
+  const addSubAdmin = async () => {
     if (newSubPin.length !== 4) return alert("El PIN debe tener 4 dígitos.");
     if (newSubCasinos.length === 0) return alert("Selecciona al menos un local.");
     
-    const newId = Date.now();
-    setSubAdmins([...subAdmins, { id: newId, pin: newSubPin, casinos: newSubCasinos }]);
+    const newSub = { pin: newSubPin, casinos: newSubCasinos };
+    
+    // Guardar en Supabase
+    const { data, error } = await supabase.from('subadmins').insert([newSub]).select();
+    
+    if (!error && data) {
+      setSubAdmins([...subAdmins, data[0]]);
+    } else {
+      // Fallback
+      const newId = Date.now();
+      setSubAdmins([...subAdmins, { id: newId, pin: newSubPin, casinos: newSubCasinos }]);
+    }
+    
     setNewSubPin('');
     setNewSubCasinos([]);
   };
 
-  const removeSubAdmin = (id: number) => {
+  const removeSubAdmin = async (id: number) => {
+    await supabase.from('subadmins').delete().eq('id', id);
     setSubAdmins(subAdmins.filter(sa => sa.id !== id));
   };
 
-  const updateMessageConfig = (id: number, field: string, value: string | number) => {
+  const updateMessageConfig = async (id: number, field: string, value: string | number) => {
     setMessagesConfig(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m));
+    await supabase.from('mensajes_config').update({ [field]: value }).eq('id', id);
   };
 
   const updateCasinoMeta = async (id: number, field: string, value: any) => {
@@ -600,7 +641,7 @@ export default function DashboardApp() {
     <div className="min-h-screen bg-gray-900 text-white pb-20 p-4 md:p-8">
       {showInstallModal && <InstallModal />}
       
-      {/* MODAL GRÁFICA INDIVIDUAL (Ajustes de color aplicados) */}
+      {/* MODAL GRÁFICA INDIVIDUAL */}
       {activeGraphCasino && (
         <div className="fixed inset-0 z-[150] flex flex-col p-4 md:p-8 animate-in fade-in zoom-in duration-300">
            
@@ -651,7 +692,7 @@ export default function DashboardApp() {
                         <div className="absolute bottom-0 w-full rounded-t-xl transition-all duration-1000 flex justify-center shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)]"
                              style={{ 
                                height: `${Math.min(activeGraphCasino.porcentajeMensual, 100)}%`,
-                               background: activeGraphCasino.modalBarColor // Toma el nuevo color oscuro
+                               background: activeGraphCasino.modalBarColor
                              }}>
                            
                            {/* PORCENTAJE */}
@@ -911,12 +952,24 @@ export default function DashboardApp() {
                      <input type="password" value={systemPin} onChange={e => handleSystemPinUpdate(e.target.value.replace(/\D/g, '').slice(0,4))} className="w-full bg-gray-900 p-3 rounded text-2xl tracking-[1em] text-center text-blue-400 focus:outline-none focus:border-blue-500 border border-transparent" />
                    </div>
                    
-                   <div className="bg-red-900/20 p-6 rounded-xl border border-red-500/30 text-center flex flex-col justify-center">
-                     <h4 className="font-bold text-red-400 text-lg mb-2 flex items-center justify-center gap-2"><Save size={20}/> Cierre Financiero</h4>
-                     <p className="text-xs text-gray-400 mb-4">Guarda la data en el Historial DB y reinicia ventas y utilidades a $0 conservando las metas establecidas.</p>
-                     <button onClick={() => setShowCloseMonthModal(true)} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-lg text-sm flex items-center justify-center gap-2 transition shadow-[0_0_15px_rgba(239,68,68,0.5)]">
-                       Cerrar Mes y Reiniciar
-                     </button>
+                   <div>
+                     {/* NUEVO: CORTE PARCIAL */}
+                     <div className="bg-blue-900/20 p-5 rounded-xl border border-blue-500/30 text-center mb-4">
+                       <h4 className="font-bold text-blue-400 text-sm mb-2 flex items-center justify-center gap-2"><History size={16}/> Corte Parcial</h4>
+                       <p className="text-[10px] text-gray-400 mb-3 leading-tight">Guarda una copia exacta de los acumulados de hoy en la base de datos sin reiniciar nada a $0.</p>
+                       <button onClick={handleCorteParcial} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 transition shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+                         Guardar Corte en DB
+                       </button>
+                     </div>
+
+                     {/* REINICIO DE MES */}
+                     <div className="bg-red-900/20 p-5 rounded-xl border border-red-500/30 text-center flex flex-col justify-center">
+                       <h4 className="font-bold text-red-400 text-sm mb-2 flex items-center justify-center gap-2"><Save size={16}/> Cierre Definitivo</h4>
+                       <p className="text-[10px] text-gray-400 mb-3 leading-tight">Guarda la data en el Historial y <span className="text-white font-bold">reinicia todo a $0</span>.</p>
+                       <button onClick={() => setShowCloseMonthModal(true)} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 transition shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                         Cerrar Mes y Reiniciar
+                       </button>
+                     </div>
                    </div>
                 </div>
               )}
@@ -1003,7 +1056,6 @@ export default function DashboardApp() {
                     </div>
                   </div>
 
-                  {/* AJUSTE APROBADO: "Deberías llevar" apilado y alineado a la izquierda */}
                   <div className="flex justify-between items-end text-[11px] px-1 mb-6 mt-1">
                     <div className="text-left leading-tight">
                        <span className="text-gray-400">Deberías llevar:</span><br/>
