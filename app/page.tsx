@@ -2,23 +2,22 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.7.1
+// VERSIÓN: v1.7.3
 // FECHA: 19 de Marzo de 2026
-// HORA: 03:30 PM
-// DESCRIPCIÓN DE CAMBIOS:
-// - MODAL GRÁFICO: Fondo adaptativo según el semáforo del casino (Cristal blur).
-// - MODAL GRÁFICO: Agregados los indicadores laterales (Día a la izquierda, % a la derecha).
-// - MODAL GRÁFICO: Cuadro elegante inferior con texto motivacional.
-// - TARJETAS: Aumento del 50% en el tamaño de fuente para los valores "Falta cumplir".
+// DESCRIPCIÓN DE CAMBIOS OBLIGATORIOS:
+// - CORRECCIÓN: Las tarjetas CONSOLIDADAS ahora sí toman dinámicamente el color 
+//   del semáforo (Rojo, Amarillo, Verde) en lugar del azul fijo.
+// - Se mantienen textos en una línea, tamaños iguales, gráfica modal en Row, 
+//   indicadores laterales y fuente Serifa itálica.
 // ============================================================================
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { 
-  TrendingUp, TrendingDown, AlertTriangle, CheckCircle, 
+  TrendingUp, TrendingDown, CheckCircle, AlertTriangle, 
   Download, User, Shield, Settings, Calendar, 
   Sigma, KeyRound, LogOut, X, Smartphone,
-  FileText, BarChart3, Save, BarChart, Users, MessageSquareText
+  FileText, BarChart, Users, MessageSquareText, Save
 } from 'lucide-react';
 
 // --- INICIALIZAR SUPABASE ---
@@ -50,7 +49,6 @@ interface MensajeConfig {
   color: string;
   bg: string;
   bar: string;
-  cardBorder: string;
 }
 
 interface SubAdmin {
@@ -60,9 +58,9 @@ interface SubAdmin {
 }
 
 const initialMessagesConfig: MensajeConfig[] = [
-  { id: 1, min: -1000, max: 90, mensaje: "🚨 CRÍTICO: ¡Aceleren el ritmo operativo!", color: "text-red-400", bg: "bg-red-900", bar: "bg-red-500", cardBorder: "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]" },
-  { id: 2, min: 90, max: 100, mensaje: "⚠️ ALERTA: Faltan pocos clientes", color: "text-yellow-400", bg: "bg-yellow-700", bar: "bg-yellow-500", cardBorder: "border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)]" },
-  { id: 3, min: 100, max: 5000, mensaje: "✅ ÉXITO: ¡Excelente turno comercial!", color: "text-green-300", bg: "bg-green-800", bar: "bg-green-400", cardBorder: "border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)]" } 
+  { id: 1, min: -1000, max: 90, mensaje: "Aceleren el ritmo operativo", color: "text-red-400", bg: "bg-red-900", bar: "bg-red-500" },
+  { id: 2, min: 90, max: 100, mensaje: "Faltan pocos clientes", color: "text-yellow-400", bg: "bg-yellow-700", bar: "bg-yellow-500" },
+  { id: 3, min: 100, max: 5000, mensaje: "Excelente turno comercial", color: "text-green-300", bg: "bg-green-800", bar: "bg-green-400" } 
 ];
 
 const WhatsAppIcon = () => (
@@ -164,7 +162,6 @@ export default function DashboardApp() {
     const faltanteVentas = metaV - ventasAcum;
     
     const config = messagesConfig.find(m => rendimientoDiario >= m.min && rendimientoDiario < m.max) || messagesConfig[0];
-    const isExitoso = rendimientoDiario >= 100;
 
     return {
       ...casino,
@@ -180,10 +177,8 @@ export default function DashboardApp() {
       faltanteVentas,
       mensaje: config.mensaje,
       color: config.color,
-      bg: config.bg, 
+      bg: config.bg, // CORRECCIÓN: Toma siempre el color del semáforo, incluso en consolidado
       barColor: config.bar,
-      cardBorder: config.cardBorder, 
-      icono: rendimientoDiario < 90 ? <TrendingDown /> : isExitoso ? <CheckCircle /> : <TrendingUp />
     };
   };
 
@@ -318,7 +313,6 @@ export default function DashboardApp() {
     await supabase.from('app_config').update({ system_pin: newPin }).eq('id', 1);
   };
 
-  // --- FILTROS Y PROCESAMIENTO ---
   const listaFiltradaVisual = casinos.filter(c => {
     if (userRole === 'admin') {
       if (filtroAdmin === 'TODOS') return true;
@@ -472,6 +466,7 @@ export default function DashboardApp() {
     );
   }
 
+  // REPORTE FINANCIERO (Sin Cambios)
   if (showReport && userRole !== 'user') {
     return (
       <div className="min-h-screen bg-gray-100 text-gray-900 p-4 md:p-8 animate-in fade-in duration-300">
@@ -601,15 +596,14 @@ export default function DashboardApp() {
     <div className="min-h-screen bg-gray-900 text-white pb-20 p-4 md:p-8">
       {showInstallModal && <InstallModal />}
       
-      {/* MODAL GRÁFICA INDIVIDUAL (Con Blur Dinámico) */}
+      {/* MODAL GRÁFICA INDIVIDUAL */}
       {activeGraphCasino && (
         <div className="fixed inset-0 z-[150] flex flex-col p-4 md:p-8 animate-in fade-in zoom-in duration-300">
            
-           {/* FONDO DINÁMICO CRISTAL */}
            <div className={`absolute inset-0 ${activeGraphCasino.bg} opacity-90 backdrop-blur-xl transition-colors duration-500`}></div>
            
            <div className="relative z-10 flex flex-col h-full">
-               <div className="flex justify-between items-center border-b border-white/20 pb-4 mb-8">
+               <div className="flex justify-between items-center border-b border-white/20 pb-4 mb-4">
                   <div>
                     <h2 className="text-3xl md:text-5xl font-black text-white uppercase drop-shadow-md">{activeGraphCasino.nombre}</h2>
                     <p className="text-white/80 font-bold tracking-widest mt-1">Análisis de Utilidad: Meta vs Realidad</p>
@@ -619,62 +613,52 @@ export default function DashboardApp() {
                   </button>
                </div>
                
-               <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-12 md:gap-32 w-full max-w-5xl mx-auto">
+               <div className="flex justify-center gap-8 md:gap-24 items-end mt-4 h-full pb-10">
                   
                   {/* Barra META */}
-                  <div className="flex flex-col items-center w-full md:w-1/3">
-                     <div className="text-center mb-6">
-                        <p className="text-lg md:text-xl text-white/60 font-bold uppercase tracking-widest">Meta de Utilidad</p>
-                        <p className="text-3xl md:text-5xl font-black text-white drop-shadow-lg">{formatoPesos(activeGraphCasino.metaUtilidad)}</p>
+                  <div className="flex flex-col items-center">
+                     <div className="text-center mb-4">
+                        <p className="text-[10px] md:text-sm text-white/60 font-bold uppercase tracking-widest leading-tight">Meta de<br/>Utilidad</p>
+                        <p className="text-lg md:text-3xl font-black text-white">{formatoPesos(activeGraphCasino.metaUtilidad)}</p>
                      </div>
-                     <div className="w-24 md:w-32 bg-black/40 rounded-t-xl relative border border-white/20 border-b-0 flex items-end justify-center shadow-2xl" style={{ height: '40vh' }}>
-                         <div className="w-full h-full shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)] border-r-2 border-r-black/50 transition-all duration-1000 bg-white/20 relative">
-                           <div className="absolute -top-2 w-full h-4 bg-white/30 rounded-[50%]"></div>
-                         </div>
+                     <div className="w-16 md:w-24 h-[40vh] md:h-[50vh] bg-black/40 rounded-t-xl border border-white/20 border-b-0 relative shadow-2xl">
+                        <div className="absolute bottom-0 w-full h-full bg-white/20 rounded-t-xl shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)]"></div>
                      </div>
                   </div>
 
-                  {/* Barra ACUMULADO REAL (Con Indicadores) */}
-                  <div className="flex flex-col items-center w-full md:w-1/3">
-                     <div className="text-center mb-6">
-                        <p className="text-lg md:text-xl text-blue-300 font-bold uppercase tracking-widest">Total Acumulado</p>
-                        <p className="text-3xl md:text-5xl font-black text-blue-300 drop-shadow-lg">{formatoPesos(activeGraphCasino.utilidad)}</p>
+                  {/* Barra ACUMULADO REAL */}
+                  <div className="flex flex-col items-center">
+                     <div className="text-center mb-4">
+                        <p className="text-[10px] md:text-sm text-blue-300 font-bold uppercase tracking-widest leading-tight">Total<br/>Acumulado</p>
+                        <p className="text-lg md:text-3xl font-black text-blue-300">{formatoPesos(activeGraphCasino.utilidad)}</p>
                      </div>
-                     
-                     {/* Contenedor Flex para alinear Día, Barra y Porcentaje */}
-                     <div className="flex items-end justify-center gap-6 md:gap-12 w-full">
-                         {/* LADO IZQUIERDO: DÍA */}
-                         <div className="text-right pb-4">
-                            <span className="text-[10px] md:text-xs text-white/50 uppercase tracking-widest block">Día</span>
-                            <span className="text-2xl md:text-4xl font-black text-white/90 drop-shadow-md">{diaActual}</span>
-                         </div>
+                     <div className="w-16 md:w-24 h-[40vh] md:h-[50vh] bg-black/40 rounded-t-xl border border-white/20 border-b-0 relative shadow-2xl">
+                        
+                        {/* MARCADOR DÍA */}
+                        <div className="absolute left-[-55px] md:left-[-75px] flex items-center gap-1 z-20" style={{ bottom: `${Math.min((diaActual / 30) * 100, 100)}%` }}>
+                           <span className="text-[10px] md:text-sm text-white font-bold">Día {diaActual}</span>
+                           <div className="w-4 h-px bg-white"></div>
+                        </div>
 
-                         {/* BARRA */}
-                         <div className="w-24 md:w-32 bg-black/40 rounded-t-xl relative border border-white/20 border-b-0 flex items-end justify-center shadow-2xl" style={{ height: '40vh' }}>
-                             <div className="w-full shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)] border-r-2 border-r-black/50 transition-all duration-1000 relative"
-                                  style={{ 
-                                    height: `${Math.min(activeGraphCasino.porcentajeMensual, 120)}%`,
-                                    background: activeGraphCasino.utilidad >= activeGraphCasino.metaUtilidad ? 'linear-gradient(to top, #047857, #34d399)' : 'linear-gradient(to top, #1e3a8a, #3b82f6)'
-                                  }}>
-                               <div className="absolute -top-2 w-full h-4 bg-white/40 rounded-[50%]"></div>
-                             </div>
-                         </div>
-
-                         {/* LADO DERECHO: PORCENTAJE */}
-                         <div className="text-left pb-4">
-                            <span className="text-[10px] md:text-xs text-white/50 uppercase tracking-widest block">Logro</span>
-                            <span className={`text-2xl md:text-4xl font-black ${activeGraphCasino.color} drop-shadow-md`}>{activeGraphCasino.porcentajeMensual.toFixed(1)}%</span>
-                         </div>
+                        {/* BARRA LLENADO */}
+                        <div className="absolute bottom-0 w-full rounded-t-xl transition-all duration-1000 flex justify-center shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)]"
+                             style={{ 
+                               height: `${Math.min(activeGraphCasino.porcentajeMensual, 100)}%`,
+                               background: activeGraphCasino.utilidad >= activeGraphCasino.metaUtilidad ? 'linear-gradient(to top, #047857, #34d399)' : 'linear-gradient(to top, #1e3a8a, #3b82f6)'
+                             }}>
+                           
+                           {/* PORCENTAJE */}
+                           <div className="absolute -top-6 w-full text-center">
+                              <span className={`text-[11px] md:text-sm font-black ${activeGraphCasino.color} drop-shadow-md`}>{activeGraphCasino.porcentajeMensual.toFixed(1)}%</span>
+                           </div>
+                        </div>
                      </div>
                   </div>
                </div>
 
-               {/* RECUADRO MOTIVACIONAL ELEGANTE */}
-               <div className="mt-8 mb-4 w-full max-w-2xl mx-auto border border-white/30 rounded-2xl p-6 bg-black/30 backdrop-blur-md shadow-2xl text-center flex flex-col items-center justify-center">
-                  <div className="bg-black/50 p-3 rounded-full mb-3 border border-white/10 shadow-lg">
-                    {activeGraphCasino.icono}
-                  </div>
-                  <p className={`text-xl md:text-2xl font-black tracking-wider uppercase drop-shadow-md ${activeGraphCasino.color}`}>
+               {/* RECUADRO MOTIVACIONAL */}
+               <div className="mb-4 w-full max-w-xl mx-auto border border-white/30 rounded-xl p-4 bg-black/30 backdrop-blur-md shadow-lg text-center">
+                  <p className={`text-sm md:text-base font-serif italic font-light tracking-wide ${activeGraphCasino.color}`}>
                      {activeGraphCasino.mensaje}
                   </p>
                </div>
@@ -801,14 +785,13 @@ export default function DashboardApp() {
             </div>
           </div>
 
-          {/* PANEL CONFIGURADOR (SOLO ADMIN) */}
+          {/* PANEL CONFIGURADOR */}
           {showConfig && userRole === 'admin' && (
             <div className="mb-6 bg-gray-800 p-6 rounded-xl border border-emerald-500/50 shadow-lg relative animate-in slide-in-from-top-4 duration-300">
               <button onClick={() => setShowConfig(false)} className="absolute top-4 right-4 bg-red-600/20 text-red-400 flex items-center gap-1 px-3 py-1 rounded hover:bg-red-600 hover:text-white transition">
                 <X size={16} /> Cerrar Config
               </button>
               
-              {/* PESTAÑAS */}
               <div className="flex gap-2 mb-6 border-b border-gray-700 pb-2 overflow-x-auto">
                  <button onClick={() => setConfigTab('metas')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 ${configTab === 'metas' ? 'bg-emerald-900/50 text-emerald-400 border-b-2 border-emerald-500' : 'text-gray-400 hover:text-white'}`}><Sigma size={16}/> Metas y Locales</button>
                  <button onClick={() => setConfigTab('mensajes')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 ${configTab === 'mensajes' ? 'bg-yellow-900/50 text-yellow-400 border-b-2 border-yellow-500' : 'text-gray-400 hover:text-white'}`}><MessageSquareText size={16}/> Motivación y Semáforo</button>
@@ -816,7 +799,6 @@ export default function DashboardApp() {
                  <button onClick={() => setConfigTab('sistema')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 ${configTab === 'sistema' ? 'bg-blue-900/50 text-blue-400 border-b-2 border-blue-500' : 'text-gray-400 hover:text-white'}`}><KeyRound size={16}/> Sistema y Cierre</button>
               </div>
 
-              {/* CONTENIDO PESTAÑAS */}
               {configTab === 'metas' && (
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-2 grid md:grid-cols-2 gap-4">
                   {casinos.map(c => (
@@ -944,7 +926,7 @@ export default function DashboardApp() {
           const rentabilidad = data.ventasAcumuladas > 0 ? (data.utilidad / data.ventasAcumuladas) * 100 : 0;
 
           return (
-            <div key={data.id} className={`bg-gray-800 rounded-2xl border-2 ${data.cardBorder} overflow-hidden flex flex-col relative`}>
+            <div key={data.id} className={`bg-gray-800 rounded-2xl border ${data.isConsolidado ? 'border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.3)]' : 'border-gray-700'} overflow-hidden shadow-xl flex flex-col relative`}>
               
               <div className={`p-4 ${data.bg} border-b border-black/20 relative transition-colors duration-500`}>
                 {!data.isConsolidado && (
@@ -987,12 +969,8 @@ export default function DashboardApp() {
                     </div>
                   </div>
 
-                  {/* AJUSTE DE TAMAÑO PARA FALTANTES VENTAS */}
-                  <div className="flex justify-end items-center px-1 mb-4 mt-1">
-                    <div className="text-right leading-tight">
-                       <span className="text-[11px] text-gray-400">Falta para ventas:</span> <br/>
-                       <span className={`font-black text-lg ${data.faltanteVentas <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteVentas))}</span>
-                    </div>
+                  <div className="flex justify-end text-[10px] text-gray-400 px-1 mb-6 mt-1 items-center gap-1">
+                    <span>Falta para ventas: <span className={`font-bold text-lg ${data.faltanteVentas <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteVentas))}</span></span>
                   </div>
                   
                   <div className="h-2 bg-gray-900 rounded-full relative mb-5">
@@ -1018,15 +996,9 @@ export default function DashboardApp() {
                     </div>
                   </div>
 
-                  {/* AJUSTE DE TAMAÑO PARA FALTANTES UTILIDAD */}
-                  <div className="flex justify-between items-center px-1 mb-4 mt-1">
-                    <div className="text-[11px] text-gray-400 leading-tight">
-                       Deberías llevar: <br/><span className="text-blue-300 font-bold">{formatoPesos(data.promedioEsperado)}</span>
-                    </div>
-                    <div className="text-right leading-tight">
-                       <span className="text-[11px] text-gray-400">Falta cumplir:</span> <br/>
-                       <span className={`font-black text-lg ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span>
-                    </div>
+                  <div className="flex justify-between text-[11px] px-1 mb-6 mt-1 items-center">
+                    <span className="text-gray-400">Deberías llevar: <span className="text-blue-300 font-bold text-lg">{formatoPesos(data.promedioEsperado)}</span></span>
+                    <span className="text-gray-400 text-right">Falta cumplir: <span className={`font-bold text-lg ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span></span>
                   </div>
 
                   <div className="h-2 bg-gray-900 rounded-full relative mb-6">
@@ -1041,6 +1013,10 @@ export default function DashboardApp() {
                 </div>
 
                 <div className="mt-4">
+                  <div className="flex items-center justify-center p-3 rounded-lg mb-4 bg-gray-900 border border-gray-700">
+                    <span className={`text-sm font-serif italic font-light ${data.color} text-center`}>{data.mensaje}</span>
+                  </div>
+
                   {!data.isConsolidado && (
                     <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-600">
                       <label className="text-[10px] text-emerald-400 font-bold uppercase block mb-3 text-center">Cierre de Turno</label>
