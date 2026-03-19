@@ -2,14 +2,14 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.7.0
+// VERSIÓN: v1.7.1
 // FECHA: 19 de Marzo de 2026
-// HORA: 03:00 PM (Aprox)
+// HORA: 03:30 PM
 // DESCRIPCIÓN DE CAMBIOS:
-// - NUEVO: Gráfica individual en Modal (Meta vs Real) por cada local con botón dedicado.
-// - NUEVO: Panel de edición de mensajes motivacionales y rangos del semáforo.
-// - NUEVO: Sistema de Sub-Administradores (PINs con acceso restringido a casinos específicos).
-// - MEJORA UI: Panel de configuración reorganizado por pestañas.
+// - MODAL GRÁFICO: Fondo adaptativo según el semáforo del casino (Cristal blur).
+// - MODAL GRÁFICO: Agregados los indicadores laterales (Día a la izquierda, % a la derecha).
+// - MODAL GRÁFICO: Cuadro elegante inferior con texto motivacional.
+// - TARJETAS: Aumento del 50% en el tamaño de fuente para los valores "Falta cumplir".
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -56,13 +56,13 @@ interface MensajeConfig {
 interface SubAdmin {
   id: number;
   pin: string;
-  casinos: number[]; // IDs de los casinos asignados
+  casinos: number[];
 }
 
 const initialMessagesConfig: MensajeConfig[] = [
-  { id: 1, min: -1000, max: 90, mensaje: "🚨 CRÍTICO: ¡Aceleren el ritmo!", color: "text-red-400", bg: "bg-red-800", bar: "bg-red-500", cardBorder: "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]" },
-  { id: 2, min: 90, max: 100, mensaje: "⚠️ ALERTA: Faltan pocos clientes", color: "text-yellow-400", bg: "bg-yellow-600", bar: "bg-yellow-500", cardBorder: "border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)]" },
-  { id: 3, min: 100, max: 5000, mensaje: "✅ ÉXITO: ¡Excelente turno!", color: "text-white", bg: "bg-green-700", bar: "bg-green-400", cardBorder: "border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)]" } 
+  { id: 1, min: -1000, max: 90, mensaje: "🚨 CRÍTICO: ¡Aceleren el ritmo operativo!", color: "text-red-400", bg: "bg-red-900", bar: "bg-red-500", cardBorder: "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]" },
+  { id: 2, min: 90, max: 100, mensaje: "⚠️ ALERTA: Faltan pocos clientes", color: "text-yellow-400", bg: "bg-yellow-700", bar: "bg-yellow-500", cardBorder: "border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)]" },
+  { id: 3, min: 100, max: 5000, mensaje: "✅ ÉXITO: ¡Excelente turno comercial!", color: "text-green-300", bg: "bg-green-800", bar: "bg-green-400", cardBorder: "border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)]" } 
 ];
 
 const WhatsAppIcon = () => (
@@ -90,7 +90,6 @@ export default function DashboardApp() {
   const [diaActual, setDiaActual] = useState(1);
   const [filtroAdmin, setFiltroAdmin] = useState('TODOS');
   
-  // States para Configuración
   const [showConfig, setShowConfig] = useState(false);
   const [configTab, setConfigTab] = useState<'metas' | 'mensajes' | 'subadmins' | 'sistema'>('metas');
   const [configTarget, setConfigTarget] = useState<number | null>(null); 
@@ -104,7 +103,7 @@ export default function DashboardApp() {
   const [showCloseMonthModal, setShowCloseMonthModal] = useState(false);
   const [mesACerrar, setMesACerrar] = useState(new Date().toLocaleString('es-CO', { month: 'long' }).toUpperCase());
   
-  const [activeGraphCasino, setActiveGraphCasino] = useState<Casino | null>(null);
+  const [activeGraphCasino, setActiveGraphCasino] = useState<Casino & ReturnType<typeof evaluarCasino> | null>(null);
 
   const fetchSupabaseData = async () => {
     setIsLoading(true);
@@ -194,7 +193,6 @@ export default function DashboardApp() {
       setIsAuthenticated(true);
       fetchSupabaseData();
     } else {
-      // Verificar si es Sub-Admin
       const isSubAdmin = subAdmins.find(sa => sa.pin === pinInput);
       if (isSubAdmin) {
         setUserRole('subadmin');
@@ -204,7 +202,6 @@ export default function DashboardApp() {
         return;
       }
       
-      // Verificar si es Usuario Normal
       const existePIN = casinos.some(c => c.pin === pinInput);
       if (existePIN) {
         setUserRole('user');
@@ -284,7 +281,6 @@ export default function DashboardApp() {
     fetchSupabaseData(); 
   };
 
-  // --- SUB-ADMINISTRADORES ---
   const toggleSubCasino = (id: number) => {
     setNewSubCasinos(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
   };
@@ -307,8 +303,22 @@ export default function DashboardApp() {
     setMessagesConfig(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m));
   };
 
+  const updateCasinoMeta = async (id: number, field: string, value: any) => {
+    let finalValue: any = value;
+    if (field !== 'pin' && field !== 'nombre' && field !== 'categoria' && field !== 'dia') {
+      finalValue = parseFloat(value) || 0;
+    }
+    const updates: any = { [field]: finalValue };
+    setCasinos(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    await supabase.from('casinos').update(updates).eq('id', id);
+  };
 
-  // --- FILTROS ---
+  const handleSystemPinUpdate = async (newPin: string) => {
+    setSystemPin(newPin);
+    await supabase.from('app_config').update({ system_pin: newPin }).eq('id', 1);
+  };
+
+  // --- FILTROS Y PROCESAMIENTO ---
   const listaFiltradaVisual = casinos.filter(c => {
     if (userRole === 'admin') {
       if (filtroAdmin === 'TODOS') return true;
@@ -320,7 +330,7 @@ export default function DashboardApp() {
     if (userRole === 'subadmin') {
        if (!loggedInSubCasinos.includes(c.id)) return false;
        if (filtroAdmin === 'TODOS') return true;
-       return c.categoria === filtroAdmin; // Subadmins también pueden filtrar
+       return c.categoria === filtroAdmin; 
     }
     return c.pin === loggedInUserPin;
   });
@@ -328,8 +338,6 @@ export default function DashboardApp() {
   const getCasinosProcesados = () => {
     const gruposPorPin: Record<string, Casino[]> = {};
     listaFiltradaVisual.forEach(c => {
-      // Para evitar agrupar accidentalmente si un sub-admin tiene varios con pines distintos, agrupamos por nombre base o PIN
-      // Simplificamos: Si el usuario es LOCAL, agrupa por PIN. Si es ADMIN/SUBADMIN agrupa solo si los PINs son idénticos.
       if (!gruposPorPin[c.pin]) gruposPorPin[c.pin] = [];
       gruposPorPin[c.pin].push(c);
     });
@@ -593,51 +601,83 @@ export default function DashboardApp() {
     <div className="min-h-screen bg-gray-900 text-white pb-20 p-4 md:p-8">
       {showInstallModal && <InstallModal />}
       
-      {/* MODAL GRÁFICA INDIVIDUAL */}
+      {/* MODAL GRÁFICA INDIVIDUAL (Con Blur Dinámico) */}
       {activeGraphCasino && (
-        <div className="fixed inset-0 bg-black/95 flex flex-col z-[150] p-4 md:p-8 animate-in fade-in zoom-in duration-300">
-           <div className="flex justify-between items-center border-b border-gray-700 pb-4 mb-8">
-              <div>
-                <h2 className="text-3xl font-black text-white uppercase">{activeGraphCasino.nombre}</h2>
-                <p className="text-emerald-400 font-bold">Análisis: Meta vs Total Acumulado (Utilidad)</p>
-              </div>
-              <button onClick={() => setActiveGraphCasino(null)} className="bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white p-3 rounded-xl transition">
-                <X size={32} />
-              </button>
-           </div>
+        <div className="fixed inset-0 z-[150] flex flex-col p-4 md:p-8 animate-in fade-in zoom-in duration-300">
            
-           <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-12 md:gap-32 w-full max-w-5xl mx-auto">
-              
-              {/* Barra META */}
-              <div className="flex flex-col items-center w-full md:w-1/3">
-                 <div className="text-center mb-6">
-                    <p className="text-xl text-gray-400 font-bold uppercase tracking-widest">Meta Utilidad</p>
-                    <p className="text-4xl font-black text-white">{formatoPesos(activeGraphCasino.metaUtilidad)}</p>
-                 </div>
-                 <div className="w-32 bg-gray-800 rounded-t-xl relative border border-gray-600 border-b-0 flex items-end justify-center" style={{ height: '40vh' }}>
-                     <div className="w-full h-full shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)] border-r-2 border-r-black/50 transition-all duration-1000 bg-gray-600 relative">
-                       <div className="absolute -top-2 w-full h-4 bg-white/20 rounded-[50%]"></div>
+           {/* FONDO DINÁMICO CRISTAL */}
+           <div className={`absolute inset-0 ${activeGraphCasino.bg} opacity-90 backdrop-blur-xl transition-colors duration-500`}></div>
+           
+           <div className="relative z-10 flex flex-col h-full">
+               <div className="flex justify-between items-center border-b border-white/20 pb-4 mb-8">
+                  <div>
+                    <h2 className="text-3xl md:text-5xl font-black text-white uppercase drop-shadow-md">{activeGraphCasino.nombre}</h2>
+                    <p className="text-white/80 font-bold tracking-widest mt-1">Análisis de Utilidad: Meta vs Realidad</p>
+                  </div>
+                  <button onClick={() => setActiveGraphCasino(null)} className="bg-black/30 text-white hover:bg-red-600 hover:text-white p-3 rounded-xl transition backdrop-blur-md border border-white/10">
+                    <X size={32} />
+                  </button>
+               </div>
+               
+               <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-12 md:gap-32 w-full max-w-5xl mx-auto">
+                  
+                  {/* Barra META */}
+                  <div className="flex flex-col items-center w-full md:w-1/3">
+                     <div className="text-center mb-6">
+                        <p className="text-lg md:text-xl text-white/60 font-bold uppercase tracking-widest">Meta de Utilidad</p>
+                        <p className="text-3xl md:text-5xl font-black text-white drop-shadow-lg">{formatoPesos(activeGraphCasino.metaUtilidad)}</p>
                      </div>
-                 </div>
-              </div>
+                     <div className="w-24 md:w-32 bg-black/40 rounded-t-xl relative border border-white/20 border-b-0 flex items-end justify-center shadow-2xl" style={{ height: '40vh' }}>
+                         <div className="w-full h-full shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)] border-r-2 border-r-black/50 transition-all duration-1000 bg-white/20 relative">
+                           <div className="absolute -top-2 w-full h-4 bg-white/30 rounded-[50%]"></div>
+                         </div>
+                     </div>
+                  </div>
 
-              {/* Barra ACUMULADO REAL */}
-              <div className="flex flex-col items-center w-full md:w-1/3">
-                 <div className="text-center mb-6">
-                    <p className="text-xl text-blue-400 font-bold uppercase tracking-widest">Acumulado Real</p>
-                    <p className="text-4xl font-black text-blue-400">{formatoPesos(activeGraphCasino.utilidad)}</p>
-                 </div>
-                 <div className="w-32 bg-gray-800 rounded-t-xl relative border border-gray-600 border-b-0 flex items-end justify-center" style={{ height: '40vh' }}>
-                     {/* Matemáticas de la altura: Relativo a la Meta. Si supera, se capea a 120% para que no se salga de la pantalla */}
-                     <div className="w-full shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)] border-r-2 border-r-black/50 transition-all duration-1000 relative"
-                          style={{ 
-                            height: `${Math.min((activeGraphCasino.utilidad / activeGraphCasino.metaUtilidad) * 100, 120)}%`,
-                            background: activeGraphCasino.utilidad >= activeGraphCasino.metaUtilidad ? 'linear-gradient(to top, #047857, #34d399)' : 'linear-gradient(to top, #1e3a8a, #3b82f6)'
-                          }}>
-                       <div className="absolute -top-2 w-full h-4 bg-white/40 rounded-[50%]"></div>
+                  {/* Barra ACUMULADO REAL (Con Indicadores) */}
+                  <div className="flex flex-col items-center w-full md:w-1/3">
+                     <div className="text-center mb-6">
+                        <p className="text-lg md:text-xl text-blue-300 font-bold uppercase tracking-widest">Total Acumulado</p>
+                        <p className="text-3xl md:text-5xl font-black text-blue-300 drop-shadow-lg">{formatoPesos(activeGraphCasino.utilidad)}</p>
                      </div>
-                 </div>
-              </div>
+                     
+                     {/* Contenedor Flex para alinear Día, Barra y Porcentaje */}
+                     <div className="flex items-end justify-center gap-6 md:gap-12 w-full">
+                         {/* LADO IZQUIERDO: DÍA */}
+                         <div className="text-right pb-4">
+                            <span className="text-[10px] md:text-xs text-white/50 uppercase tracking-widest block">Día</span>
+                            <span className="text-2xl md:text-4xl font-black text-white/90 drop-shadow-md">{diaActual}</span>
+                         </div>
+
+                         {/* BARRA */}
+                         <div className="w-24 md:w-32 bg-black/40 rounded-t-xl relative border border-white/20 border-b-0 flex items-end justify-center shadow-2xl" style={{ height: '40vh' }}>
+                             <div className="w-full shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)] border-r-2 border-r-black/50 transition-all duration-1000 relative"
+                                  style={{ 
+                                    height: `${Math.min(activeGraphCasino.porcentajeMensual, 120)}%`,
+                                    background: activeGraphCasino.utilidad >= activeGraphCasino.metaUtilidad ? 'linear-gradient(to top, #047857, #34d399)' : 'linear-gradient(to top, #1e3a8a, #3b82f6)'
+                                  }}>
+                               <div className="absolute -top-2 w-full h-4 bg-white/40 rounded-[50%]"></div>
+                             </div>
+                         </div>
+
+                         {/* LADO DERECHO: PORCENTAJE */}
+                         <div className="text-left pb-4">
+                            <span className="text-[10px] md:text-xs text-white/50 uppercase tracking-widest block">Logro</span>
+                            <span className={`text-2xl md:text-4xl font-black ${activeGraphCasino.color} drop-shadow-md`}>{activeGraphCasino.porcentajeMensual.toFixed(1)}%</span>
+                         </div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* RECUADRO MOTIVACIONAL ELEGANTE */}
+               <div className="mt-8 mb-4 w-full max-w-2xl mx-auto border border-white/30 rounded-2xl p-6 bg-black/30 backdrop-blur-md shadow-2xl text-center flex flex-col items-center justify-center">
+                  <div className="bg-black/50 p-3 rounded-full mb-3 border border-white/10 shadow-lg">
+                    {activeGraphCasino.icono}
+                  </div>
+                  <p className={`text-xl md:text-2xl font-black tracking-wider uppercase drop-shadow-md ${activeGraphCasino.color}`}>
+                     {activeGraphCasino.mensaje}
+                  </p>
+               </div>
 
            </div>
         </div>
@@ -911,8 +951,7 @@ export default function DashboardApp() {
                   <img src="https://z-cdn-media.chatglm.cn/files/9a8f0b6a-4eb0-4355-958e-f0eba195dc97.png?auth_key=1873295030-16af9abaa2f147b5b6f8ada3e9491b35-0-ce3104328fea8a435aa665bd9b5b7482" alt="Logo" className="absolute top-2 left-2 w-10 h-10 rounded-full border-2 border-white shadow-md object-cover opacity-90"/>
                 )}
                 
-                {/* BOTÓN NUEVO: ABRIR GRÁFICA MODAL */}
-                <button onClick={() => setActiveGraphCasino(data)} className="absolute top-2 right-2 bg-white/20 hover:bg-white/40 text-white p-2 rounded-lg transition backdrop-blur-sm">
+                <button onClick={() => setActiveGraphCasino(data)} className="absolute top-2 right-2 bg-black/20 hover:bg-black/40 text-white p-2 rounded-lg transition backdrop-blur-sm shadow border border-white/10">
                   <BarChart size={20} />
                 </button>
 
@@ -948,8 +987,12 @@ export default function DashboardApp() {
                     </div>
                   </div>
 
-                  <div className="flex justify-end text-[10px] text-gray-400 px-1 mb-6 mt-1 text-right">
-                    <span>Falta para ventas: <span className={`font-bold ${data.faltanteVentas <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteVentas))}</span></span>
+                  {/* AJUSTE DE TAMAÑO PARA FALTANTES VENTAS */}
+                  <div className="flex justify-end items-center px-1 mb-4 mt-1">
+                    <div className="text-right leading-tight">
+                       <span className="text-[11px] text-gray-400">Falta para ventas:</span> <br/>
+                       <span className={`font-black text-lg ${data.faltanteVentas <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteVentas))}</span>
+                    </div>
                   </div>
                   
                   <div className="h-2 bg-gray-900 rounded-full relative mb-5">
@@ -975,9 +1018,15 @@ export default function DashboardApp() {
                     </div>
                   </div>
 
-                  <div className="flex justify-between text-[11px] px-1 mb-6 mt-1">
-                    <span className="text-gray-400">Deberías llevar: <span className="text-blue-300 font-bold">{formatoPesos(data.promedioEsperado)}</span></span>
-                    <span className="text-gray-400 text-right">Falta cumplir: <span className={`font-bold ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span></span>
+                  {/* AJUSTE DE TAMAÑO PARA FALTANTES UTILIDAD */}
+                  <div className="flex justify-between items-center px-1 mb-4 mt-1">
+                    <div className="text-[11px] text-gray-400 leading-tight">
+                       Deberías llevar: <br/><span className="text-blue-300 font-bold">{formatoPesos(data.promedioEsperado)}</span>
+                    </div>
+                    <div className="text-right leading-tight">
+                       <span className="text-[11px] text-gray-400">Falta cumplir:</span> <br/>
+                       <span className={`font-black text-lg ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span>
+                    </div>
                   </div>
 
                   <div className="h-2 bg-gray-900 rounded-full relative mb-6">
@@ -991,14 +1040,7 @@ export default function DashboardApp() {
                   </div>
                 </div>
 
-                {/* MENSAJE MOTIVACIONAL Y DOBLE INGRESO DE DATOS */}
                 <div className="mt-4">
-                  {/* TEXTO MOTIVACIONAL DEL SEMÁFORO */}
-                  <div className={`flex items-center justify-center gap-2 p-3 rounded-lg mb-4 bg-gray-900 border ${data.cardBorder}`}>
-                    {data.icono}
-                    <span className={`text-xs font-bold ${data.color} text-center`}>{data.mensaje}</span>
-                  </div>
-
                   {!data.isConsolidado && (
                     <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-600">
                       <label className="text-[10px] text-emerald-400 font-bold uppercase block mb-3 text-center">Cierre de Turno</label>
