@@ -2,13 +2,12 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.8.0
+// VERSIÓN: v1.8.1
 // FECHA: 19 de Marzo de 2026
 // DESCRIPCIÓN DE CAMBIOS OBLIGATORIOS:
-// - NUEVO: Opción de "Corte Parcial" en configuración para guardar en DB sin borrar.
-// - NUEVO: Sub-Administradores y Mensajes ahora se sincronizan con Supabase.
-// - UI INTACTA: Todos los textos, alíneaciones, barra verde izquierda y colores 
-//   oscuros de restricción se mantienen idénticos a la versión 1.7.4.
+// - NUEVO: Pestaña "Historial DB" en Configuración para ver y descargar 
+//   los cortes parciales y cierres de mes en CSV directamente desde la app.
+// - UI INTACTA: Colores, textos y diseño de la versión 1.8.0 sin alteraciones.
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -17,7 +16,7 @@ import {
   TrendingUp, TrendingDown, CheckCircle, AlertTriangle, 
   Download, User, Shield, Settings, Calendar, 
   Sigma, KeyRound, LogOut, X, Smartphone,
-  FileText, BarChart, Users, MessageSquareText, Save, History
+  FileText, BarChart, Users, MessageSquareText, Save, History, Archive
 } from 'lucide-react';
 
 // --- INICIALIZAR SUPABASE ---
@@ -58,6 +57,14 @@ interface SubAdmin {
   casinos: number[];
 }
 
+interface HistorialRegistro {
+  id: number;
+  mes: string;
+  ano: number;
+  fecha_cierre: string;
+  datos_json: any;
+}
+
 const initialMessagesConfig: MensajeConfig[] = [
   { id: 1, min: -1000, max: 90, mensaje: "Aceleren el ritmo operativo", color: "text-red-400", bg: "bg-red-900", bar: "bg-red-500", modalBarColor: "linear-gradient(to top, #7f1d1d, #b91c1c)" },
   { id: 2, min: 90, max: 100, mensaje: "Faltan pocos clientes", color: "text-yellow-400", bg: "bg-yellow-700", bar: "bg-yellow-500", modalBarColor: "linear-gradient(to top, #78350f, #b45309)" },
@@ -80,6 +87,7 @@ export default function DashboardApp() {
   const [casinos, setCasinos] = useState<Casino[]>([]);
   const [messagesConfig, setMessagesConfig] = useState<MensajeConfig[]>(initialMessagesConfig);
   const [subAdmins, setSubAdmins] = useState<SubAdmin[]>([]);
+  const [registrosHistorial, setRegistrosHistorial] = useState<HistorialRegistro[]>([]);
   
   const [userRole, setUserRole] = useState<'admin' | 'subadmin' | 'user'>('admin');
   const [loggedInUserPin, setLoggedInUserPin] = useState<string>(''); 
@@ -90,7 +98,7 @@ export default function DashboardApp() {
   const [filtroAdmin, setFiltroAdmin] = useState('TODOS');
   
   const [showConfig, setShowConfig] = useState(false);
-  const [configTab, setConfigTab] = useState<'metas' | 'mensajes' | 'subadmins' | 'sistema'>('metas');
+  const [configTab, setConfigTab] = useState<'metas' | 'mensajes' | 'subadmins' | 'sistema' | 'historial'>('metas');
   const [configTarget, setConfigTarget] = useState<number | null>(null); 
   const [newSubPin, setNewSubPin] = useState('');
   const [newSubCasinos, setNewSubCasinos] = useState<number[]>([]);
@@ -137,6 +145,13 @@ export default function DashboardApp() {
     setIsLoading(false);
   };
 
+  const cargarHistorial = async () => {
+    const { data, error } = await supabase.from('historial_cierres').select('*').order('fecha_cierre', { ascending: false });
+    if (!error && data) {
+      setRegistrosHistorial(data);
+    }
+  };
+
   useEffect(() => {
     setIsMounted(true);
     const today = new Date().getDate();
@@ -157,6 +172,12 @@ export default function DashboardApp() {
       localStorage.setItem('casinos_subadmins_v17_4', JSON.stringify(subAdmins));
     }
   }, [messagesConfig, subAdmins, isMounted]);
+
+  useEffect(() => {
+    if (showConfig && configTab === 'historial') {
+      cargarHistorial();
+    }
+  }, [showConfig, configTab]);
 
   const formatoPesos = (val: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(val);
   const getPromedioEsperado = (meta: number) => (meta / 30) * diaActual;
@@ -291,7 +312,6 @@ export default function DashboardApp() {
     fetchSupabaseData(); 
   };
 
-  // NUEVO: Guardar Corte Parcial
   const handleCorteParcial = async () => {
     const añoActual = new Date().getFullYear();
     const fechaCierreStr = new Date().toISOString();
@@ -305,6 +325,7 @@ export default function DashboardApp() {
       alert("Error al guardar historial: " + errorHistorial.message);
     } else {
       alert(`Corte parcial guardado exitosamente en el historial como:\n"${nombreCorte}"\n\nLos acumulados de los locales continúan intactos.`);
+      if (configTab === 'historial') cargarHistorial();
     }
   };
 
@@ -318,13 +339,11 @@ export default function DashboardApp() {
     
     const newSub = { pin: newSubPin, casinos: newSubCasinos };
     
-    // Guardar en Supabase
     const { data, error } = await supabase.from('subadmins').insert([newSub]).select();
     
     if (!error && data) {
       setSubAdmins([...subAdmins, data[0]]);
     } else {
-      // Fallback
       const newId = Date.now();
       setSubAdmins([...subAdmins, { id: newId, pin: newSubPin, casinos: newSubCasinos }]);
     }
@@ -446,7 +465,22 @@ export default function DashboardApp() {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = "reporte_casinos.csv";
+    link.download = "reporte_casinos_actual.csv";
+    link.click();
+  };
+
+  const exportarCSVHistorial = (registro: HistorialRegistro) => {
+    let csv = "Local,Meta Ventas,Ventas Reales,Meta Utilidad,Utilidad Real,Ultima Fecha Turno\n";
+    const datosArray = typeof registro.datos_json === 'string' ? JSON.parse(registro.datos_json) : registro.datos_json;
+    
+    datosArray.forEach((c: any) => {
+      csv += `${c.nombre || 'N/A'},${c.metaMensual || 0},${c.ventasAcumuladas || 0},${c.metaUtilidad || 0},${c.utilidad || 0},${c.fecha || 'N/A'}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `reporte_${registro.mes.replace(/ /g, '_')}.csv`;
     link.click();
   };
   
@@ -674,7 +708,7 @@ export default function DashboardApp() {
                      </div>
                   </div>
 
-                  {/* Barra Derecha ACUMULADO REAL (Color oscuro según restricción) */}
+                  {/* Barra Derecha ACUMULADO REAL */}
                   <div className="flex flex-col items-center">
                      <div className="text-center mb-4">
                         <p className="text-[10px] md:text-sm text-blue-300 font-bold uppercase tracking-widest leading-tight">Total<br/>Acumulado</p>
@@ -688,7 +722,7 @@ export default function DashboardApp() {
                            <div className="w-4 h-px bg-white"></div>
                         </div>
 
-                        {/* BARRA LLENADO (Oscura según semáforo) */}
+                        {/* BARRA LLENADO */}
                         <div className="absolute bottom-0 w-full rounded-t-xl transition-all duration-1000 flex justify-center shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)]"
                              style={{ 
                                height: `${Math.min(activeGraphCasino.porcentajeMensual, 100)}%`,
@@ -828,7 +862,7 @@ export default function DashboardApp() {
                 </button>
               )}
               <button onClick={exportarCSV} className="flex items-center gap-1 px-4 py-1 rounded text-xs bg-emerald-600 hover:bg-emerald-500 font-semibold">
-                <Download size={14}/> CSV
+                <Download size={14}/> CSV Actual
               </button>
             </div>
           </div>
@@ -845,6 +879,7 @@ export default function DashboardApp() {
                  <button onClick={() => setConfigTab('mensajes')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 ${configTab === 'mensajes' ? 'bg-yellow-900/50 text-yellow-400 border-b-2 border-yellow-500' : 'text-gray-400 hover:text-white'}`}><MessageSquareText size={16}/> Motivación y Semáforo</button>
                  <button onClick={() => setConfigTab('subadmins')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 ${configTab === 'subadmins' ? 'bg-purple-900/50 text-purple-400 border-b-2 border-purple-500' : 'text-gray-400 hover:text-white'}`}><Users size={16}/> Sub-Administradores</button>
                  <button onClick={() => setConfigTab('sistema')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 ${configTab === 'sistema' ? 'bg-blue-900/50 text-blue-400 border-b-2 border-blue-500' : 'text-gray-400 hover:text-white'}`}><KeyRound size={16}/> Sistema y Cierre</button>
+                 <button onClick={() => setConfigTab('historial')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 ${configTab === 'historial' ? 'bg-indigo-900/50 text-indigo-400 border-b-2 border-indigo-500' : 'text-gray-400 hover:text-white'}`}><Archive size={16}/> Historial DB</button>
               </div>
 
               {configTab === 'metas' && (
@@ -953,7 +988,6 @@ export default function DashboardApp() {
                    </div>
                    
                    <div>
-                     {/* NUEVO: CORTE PARCIAL */}
                      <div className="bg-blue-900/20 p-5 rounded-xl border border-blue-500/30 text-center mb-4">
                        <h4 className="font-bold text-blue-400 text-sm mb-2 flex items-center justify-center gap-2"><History size={16}/> Corte Parcial</h4>
                        <p className="text-[10px] text-gray-400 mb-3 leading-tight">Guarda una copia exacta de los acumulados de hoy en la base de datos sin reiniciar nada a $0.</p>
@@ -962,7 +996,6 @@ export default function DashboardApp() {
                        </button>
                      </div>
 
-                     {/* REINICIO DE MES */}
                      <div className="bg-red-900/20 p-5 rounded-xl border border-red-500/30 text-center flex flex-col justify-center">
                        <h4 className="font-bold text-red-400 text-sm mb-2 flex items-center justify-center gap-2"><Save size={16}/> Cierre Definitivo</h4>
                        <p className="text-[10px] text-gray-400 mb-3 leading-tight">Guarda la data en el Historial y <span className="text-white font-bold">reinicia todo a $0</span>.</p>
@@ -971,6 +1004,40 @@ export default function DashboardApp() {
                        </button>
                      </div>
                    </div>
+                </div>
+              )}
+
+              {/* NUEVA PESTAÑA: HISTORIAL DB */}
+              {configTab === 'historial' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-2 border-b border-gray-700 pb-2">
+                     <p className="text-sm text-gray-400">Listado de cortes parciales y cierres de mes guardados en la nube.</p>
+                     <button onClick={cargarHistorial} className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-white flex items-center gap-1">Actualizar Lista</button>
+                  </div>
+                  
+                  {registrosHistorial.length === 0 ? (
+                    <div className="text-center p-8 bg-gray-900 rounded-xl border border-gray-700">
+                       <Archive className="mx-auto text-gray-500 mb-2" size={32} />
+                       <p className="text-gray-400">Aún no hay ningún registro en el historial.</p>
+                    </div>
+                  ) : (
+                    <div className="max-h-80 overflow-y-auto space-y-3 pr-2">
+                       {registrosHistorial.map((registro) => (
+                         <div key={registro.id} className="bg-gray-700/50 p-4 rounded-xl border border-gray-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                               <h4 className="font-bold text-indigo-400">{registro.mes}</h4>
+                               <p className="text-xs text-gray-400">Fecha de guardado: {new Date(registro.fecha_cierre).toLocaleString('es-CO')}</p>
+                            </div>
+                            <button 
+                              onClick={() => exportarCSVHistorial(registro)} 
+                              className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-bold text-xs flex items-center justify-center gap-2 transition shadow-md whitespace-nowrap"
+                            >
+                               <Download size={14}/> Descargar CSV
+                            </button>
+                         </div>
+                       ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
