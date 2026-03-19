@@ -2,13 +2,11 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.6.0
-// FECHA: 19 de Marzo de 2026
+// VERSIÓN: v1.5.2
+// FECHA: 14 de Marzo de 2026
 // DESCRIPCIÓN DE CAMBIOS:
-// - NUEVO SEMÁFORO (Opción B): Colores basados en el rendimiento diario esperado de Utilidad.
-//   * Verde: >= 100%, Amarillo: 90% - 99%, Rojo: < 90%.
-// - NUEVA FUNCIÓN: "Cerrar Mes y Reiniciar". Guarda el estado en historial_cierres (JSON)
-//   y reinicia a cero las Ventas y Utilidades acumuladas conservando metas y PINs.
+// - NUEVO: Porcentaje de Rentabilidad (Utilidad sobre Ventas) debajo del nombre.
+// - Formato de etiqueta (Badge) para la rentabilidad, similar a la categoría.
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -17,7 +15,7 @@ import {
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, 
   Download, User, Shield, Settings, Calendar, 
   Sigma, KeyRound, LogOut, AlertOctagon, X, Loader2, Smartphone,
-  FileText, BarChart3, Save
+  FileText, BarChart3
 } from 'lucide-react';
 
 // --- INICIALIZAR SUPABASE ---
@@ -51,11 +49,11 @@ interface MensajeConfig {
   bar: string;
 }
 
-// NUEVA CONFIGURACIÓN DE COLORES SOLICITADA POR EL USUARIO (Rendimiento Diario)
 const initialMessagesConfig: MensajeConfig[] = [
-  { id: 1, min: -1000, max: 90, mensaje: "🚨 CRÍTICO: Rendimiento bajo", color: "text-red-400", bg: "bg-red-900/50", bar: "bg-red-500" },
-  { id: 2, min: 90, max: 100, mensaje: "⚠️ ALERTA: A menos del 10% de cumplir", color: "text-yellow-400", bg: "bg-yellow-900/50", bar: "bg-yellow-500" },
-  { id: 3, min: 100, max: 5000, mensaje: "✅ ÉXITO: Meta diaria superada", color: "text-white", bg: "bg-green-600", bar: "bg-green-400" } 
+  { id: 1, min: -1000, max: 50, mensaje: "🚨 CRÍTICO: ¡Acción inmediata!", color: "text-red-400", bg: "bg-red-900/50", bar: "bg-red-500" },
+  { id: 2, min: 50, max: 80, mensaje: "⚠️ ALERTA: Vamos lento.", color: "text-yellow-400", bg: "bg-yellow-900/50", bar: "bg-yellow-500" },
+  { id: 3, min: 80, max: 99, mensaje: "🔵 BUEN RITMO: ¡Casi llegamos!", color: "text-blue-400", bg: "bg-blue-900/50", bar: "bg-blue-500" },
+  { id: 4, min: 99, max: 5000, mensaje: "✅ ÉXITO: ¡Buen Trabajo!", color: "text-white", bg: "bg-green-500", bar: "bg-green-300" } 
 ];
 
 const WhatsAppIcon = () => (
@@ -86,10 +84,6 @@ export default function DashboardApp() {
   const [activeInputId, setActiveInputId] = useState<number | null>(null);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showReport, setShowReport] = useState(false);
-  
-  // Nuevo Estado para Modal de Cierre de Mes
-  const [showCloseMonthModal, setShowCloseMonthModal] = useState(false);
-  const [mesACerrar, setMesACerrar] = useState(new Date().toLocaleString('es-CO', { month: 'long' }).toUpperCase());
 
   const fetchSupabaseData = async () => {
     setIsLoading(true);
@@ -108,6 +102,11 @@ export default function DashboardApp() {
     const today = new Date().getDate();
     setDiaActual(today);
     
+    if (typeof window !== 'undefined') {
+      const savedMsgs = localStorage.getItem('casinos_msgs');
+      if (savedMsgs) setMessagesConfig(JSON.parse(savedMsgs));
+    }
+
     fetchSupabaseData();
 
     const channel = supabase.channel('realtime-casinos').on('postgres_changes', { event: '*', schema: 'public', table: 'casinos' }, () => {
@@ -116,6 +115,12 @@ export default function DashboardApp() {
 
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  useEffect(() => {
+    if (isMounted && typeof window !== 'undefined') {
+      localStorage.setItem('casinos_msgs', JSON.stringify(messagesConfig));
+    }
+  }, [messagesConfig, isMounted]);
 
   const formatoPesos = (val: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(val);
   const getPromedioEsperado = (meta: number) => (meta / 30) * diaActual;
@@ -129,9 +134,7 @@ export default function DashboardApp() {
     const promedioEsperado = getPromedioEsperado(metaU);
     const porcentajeMensual = metaU > 0 ? (utilAcumulada / metaU) * 100 : 0;
     const porcentajeVentas = metaV > 0 ? (ventasAcum / metaV) * 100 : 0;
-    
-    // Aquí está la clave de tu solicitud: El rendimiento diario es la utilidad real vs lo que debería llevar HOY
-    const rendimientoDiario = promedioEsperado > 0 ? (utilAcumulada / promedioEsperado) * 100 : (utilAcumulada > 0 ? 100 : 0);
+    const rendimientoDiario = promedioEsperado > 0 ? (utilAcumulada / promedioEsperado) * 100 : 0;
     
     const faltanteParaCumplir = metaU - utilAcumulada;
     const faltanteVentas = metaV - ventasAcum;
@@ -153,9 +156,9 @@ export default function DashboardApp() {
       faltanteVentas,
       mensaje: config.mensaje,
       color: config.color,
-      bg: casino.isConsolidado ? 'bg-indigo-900' : config.bg, // Usa directamente el color del arreglo inicial
+      bg: casino.isConsolidado ? 'bg-indigo-900' : (isExitoso ? 'bg-green-600' : config.bg),
       barColor: config.bar,
-      icono: rendimientoDiario < 90 ? <TrendingDown /> : isExitoso ? <CheckCircle /> : <TrendingUp />
+      icono: rendimientoDiario < 50 ? <TrendingDown /> : isExitoso ? <CheckCircle /> : <TrendingUp />
     };
   };
 
@@ -246,42 +249,7 @@ export default function DashboardApp() {
     await supabase.from('app_config').update({ system_pin: newPin }).eq('id', 1);
   };
 
-  // --- NUEVA LÓGICA: CERRAR MES Y GUARDAR HISTORIAL ---
-  const handleCerrarMes = async () => {
-    const añoActual = new Date().getFullYear();
-    const fechaCierreStr = new Date().toISOString();
-
-    // 1. Guardar en historial_cierres
-    const { error: errorHistorial } = await supabase.from('historial_cierres').insert([
-      { 
-        mes: mesACerrar, 
-        ano: añoActual, 
-        fecha_cierre: fechaCierreStr, 
-        datos_json: casinos // Guarda todo el arreglo como JSON
-      }
-    ]);
-
-    if (errorHistorial) {
-      alert("Error al guardar historial: " + errorHistorial.message);
-      return;
-    }
-
-    // 2. Reiniciar Ventas y Utilidades en 'casinos' a 0
-    // Las promesas se ejecutan en paralelo para mayor velocidad
-    const resetPromises = casinos.map(c => 
-      supabase.from('casinos').update({ utilidad: 0, ventasAcumuladas: 0, fecha: 'Mes Reiniciado' }).eq('id', c.id)
-    );
-    
-    await Promise.all(resetPromises);
-
-    // 3. Limpieza visual y recarga
-    alert(`Mes de ${mesACerrar} cerrado exitosamente. Datos guardados en el historial.`);
-    setShowCloseMonthModal(false);
-    setDiaActual(1); // Reiniciar el día del mes
-    fetchSupabaseData(); // Traer la tabla en ceros
-  };
-
-
+  // --- LÓGICA DE FILTRADO Y CONSOLIDADO ---
   const listaFiltradaVisual = casinos.filter(c => {
     if (userRole === 'admin') {
       if (filtroAdmin === 'TODOS') return true;
@@ -536,7 +504,7 @@ export default function DashboardApp() {
                      <th className="p-3 border-b border-gray-300">Ventas</th>
                      <th className="p-3 border-b border-gray-300">Utilidad</th>
                      <th className="p-3 border-b border-gray-300">Logro %</th>
-                     <th className="p-3 border-b border-gray-300">Estado Diario</th>
+                     <th className="p-3 border-b border-gray-300">Estado</th>
                    </tr>
                  </thead>
                  <tbody>
@@ -548,8 +516,8 @@ export default function DashboardApp() {
                          <td className="p-3 text-gray-600">{formatoPesos(d.ventasAcumuladas)}</td>
                          <td className="p-3 font-bold text-blue-700">{formatoPesos(d.utilidad)}</td>
                          <td className="p-3 font-bold">{d.porcentajeMensual.toFixed(1)}%</td>
-                         <td className={`p-3 font-bold ${d.rendimientoDiario < 90 ? 'text-red-500' : (d.rendimientoDiario >= 100 ? 'text-green-500' : 'text-yellow-500')}`}>
-                           {d.rendimientoDiario < 90 ? 'Crítico' : (d.rendimientoDiario >= 100 ? 'Óptimo' : 'Alerta')}
+                         <td className={`p-3 font-bold ${d.rendimientoDiario < 50 ? 'text-red-500' : 'text-emerald-500'}`}>
+                           {d.rendimientoDiario < 50 ? 'En Riesgo' : 'Óptimo'}
                          </td>
                        </tr>
                      )
@@ -582,34 +550,6 @@ export default function DashboardApp() {
              <div className="flex gap-4">
                <button onClick={() => setShowConfirmModal(false)} className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded font-bold">Cancelar</button>
                <button onClick={confirmEntry} className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-bold">Sí, Sumar</button>
-             </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL DE CIERRE DE MES */}
-      {showCloseMonthModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 p-6 rounded-xl border border-red-500 w-full max-w-sm text-center shadow-[0_0_20px_rgba(239,68,68,0.5)]">
-             <Save className="mx-auto text-red-500 mb-4" size={48} />
-             <h3 className="text-xl font-bold mb-2">Guardar y Reiniciar Mes</h3>
-             <p className="text-gray-400 text-sm mb-4">
-               Esta acción guardará una copia de seguridad en el historial y <span className="text-white font-bold underline">borrará las ventas y utilidades</span> actuales para empezar de cero.
-             </p>
-             
-             <div className="bg-gray-900 p-4 rounded-lg mb-6 border border-gray-700 text-left">
-               <label className="text-xs text-gray-500 block mb-1">Mes que estás cerrando:</label>
-               <input 
-                 type="text" 
-                 value={mesACerrar}
-                 onChange={(e) => setMesACerrar(e.target.value)}
-                 className="w-full bg-gray-800 border border-gray-600 p-2 rounded text-white font-bold"
-               />
-             </div>
-
-             <div className="flex gap-4">
-               <button onClick={() => setShowCloseMonthModal(false)} className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded font-bold">Cancelar</button>
-               <button onClick={handleCerrarMes} className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 rounded font-bold">Cerrar Mes</button>
              </div>
           </div>
         </div>
@@ -733,20 +673,10 @@ export default function DashboardApp() {
                   </div>
                 </div>
                 <div>
-                   <h3 className="text-lg font-bold mb-4 border-b border-gray-700 pb-2 flex items-center gap-2"><KeyRound size={18}/> Seguridad y Datos</h3>
-                   <div className="space-y-4">
-                     <div className="bg-gray-700 p-3 rounded border border-emerald-500/30">
-                       <label className="text-xs text-gray-400 block mb-1">Cambiar PIN Administrador</label>
-                       <input type="password" value={systemPin} onChange={e => handleSystemPinUpdate(e.target.value.replace(/\D/g, '').slice(0,4))} className="w-full bg-gray-900 p-2 rounded text-lg tracking-widest text-center text-emerald-400" />
-                     </div>
-                     
-                     <div className="bg-red-900/20 p-4 rounded border border-red-500/30 text-center">
-                       <h4 className="font-bold text-red-400 text-sm mb-2">Cierre Financiero</h4>
-                       <p className="text-xs text-gray-400 mb-3">Guarda la data actual en el historial y reinicia ventas y utilidades a $0 para empezar un mes nuevo.</p>
-                       <button onClick={() => setShowCloseMonthModal(true)} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded text-sm flex items-center justify-center gap-2 transition">
-                         <Save size={16}/> Cerrar Mes y Reiniciar
-                       </button>
-                     </div>
+                   <h3 className="text-lg font-bold mb-4 border-b border-gray-700 pb-2 flex items-center gap-2"><KeyRound size={18}/> Seguridad Master</h3>
+                   <div className="bg-gray-700 p-3 rounded border border-emerald-500/30">
+                     <label className="text-xs text-gray-400 block mb-1">Cambiar PIN Administrador</label>
+                     <input type="password" value={systemPin} onChange={e => handleSystemPinUpdate(e.target.value.replace(/\D/g, '').slice(0,4))} className="w-full bg-gray-900 p-2 rounded text-lg tracking-widest text-center text-emerald-400" />
                    </div>
                 </div>
               </div>
@@ -760,6 +690,7 @@ export default function DashboardApp() {
           const data = evaluarCasino(casino);
           const porcentajeTiempo = Math.round((diaActual / 30) * 100);
           
+          // --- CÁLCULO DE LA RENTABILIDAD ---
           const rentabilidad = data.ventasAcumuladas > 0 ? (data.utilidad / data.ventasAcumuladas) * 100 : 0;
 
           return (
@@ -776,6 +707,7 @@ export default function DashboardApp() {
                 
                 <h2 className="text-2xl font-black text-center text-white mt-4 mb-1 tracking-tight uppercase">{data.nombre}</h2>
                 
+                {/* --- NUEVA ETIQUETA DE RENTABILIDAD --- */}
                 <div className="text-center mb-2">
                    <span className="text-[10px] font-bold bg-black/40 text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded uppercase tracking-wider">
                      Rentabilidad: {rentabilidad.toFixed(1)}%
