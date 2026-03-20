@@ -2,12 +2,13 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.9.4 (AJUSTE VISUAL CENTRADO DINÁMICO)
+// VERSIÓN: v1.9.6 (AJUSTE TEXTOS TIEMPO Y MATEMÁTICA)
 // FECHA: 20 de Marzo de 2026
 // DESCRIPCIÓN DE CAMBIOS:
-// - NUEVO: El % Real y la diferencia monetaria ahora están anclados y 
-//   centrados exclusivamente a lo ancho de la barra de progreso a color.
-// - Todo el resto del sistema de la v1.9.2 (Auditoría, Reportes) INTACTO.
+// - CORRECCIÓN: La banderita de la línea vertical ahora muestra el % de 
+//   Tiempo transcurrido del mes y no el % de utilidad.
+// - MATEMÁTICA: El "Deberías llevar" usa los días exactos del mes actual y 
+//   la diferencia bajo la barra indica cuánto falta/sobra frente a esa meta de hoy.
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -100,7 +101,6 @@ export default function DashboardApp() {
   const [subAdmins, setSubAdmins] = useState<SubAdmin[]>([]);
   const [registrosHistorial, setRegistrosHistorial] = useState<HistorialRegistro[]>([]);
   
-  // ESTADOS DE AUDITORÍA
   const [bitacora, setBitacora] = useState<RegistroDiario[]>([]);
   const [auditoriaMode, setAuditoriaMode] = useState<'LOCAL' | 'FECHA'>('FECHA');
   const [auditoriaLocalId, setAuditoriaLocalId] = useState<number | 'TODOS'>('TODOS');
@@ -131,17 +131,13 @@ export default function DashboardApp() {
 
   const fetchSupabaseData = async () => {
     setIsLoading(true);
-    
-    // 1. Cargar Casinos
     const { data: casinosData, error } = await supabase.from('casinos').select('*').order('id');
     if (casinosData) setCasinos(casinosData);
     if (error) console.error("Error cargando casinos:", error);
 
-    // 2. Cargar PIN Master
     const { data: configData } = await supabase.from('app_config').select('system_pin').eq('id', 1).single();
     if (configData) setSystemPin(configData.system_pin);
     
-    // 3. Cargar SubAdmins desde Supabase (o Fallback local)
     const { data: subsData, error: subsError } = await supabase.from('subadmins').select('*');
     if (!subsError && subsData && subsData.length > 0) {
       setSubAdmins(subsData);
@@ -150,7 +146,6 @@ export default function DashboardApp() {
       if (savedSubs) setSubAdmins(JSON.parse(savedSubs));
     }
 
-    // 4. Cargar Mensajes desde Supabase (o Fallback local)
     const { data: msgsData, error: msgsError } = await supabase.from('mensajes_config').select('*').order('id');
     if (!msgsError && msgsData && msgsData.length > 0) {
       setMessagesConfig(msgsData);
@@ -206,7 +201,17 @@ export default function DashboardApp() {
   }, [showConfig, configTab]);
 
   const formatoPesos = (val: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(val);
-  const getPromedioEsperado = (meta: number) => (meta / 30) * diaActual;
+  
+  // OBTENER DÍAS DEL MES ACTUAL (28, 30, o 31)
+  const getDaysInCurrentMonth = () => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  };
+
+  const getPromedioEsperado = (meta: number) => {
+    const diasDelMes = getDaysInCurrentMonth();
+    return (meta / diasDelMes) * diaActual;
+  };
 
   const evaluarCasino = (casino: any) => {
     const metaV = Number(casino.metaMensual || 0);
@@ -308,7 +313,6 @@ export default function DashboardApp() {
     if (userRole === 'user') pinUsuarioStr = loggedInUserPin;
     if (userRole === 'subadmin') pinUsuarioStr = 'SUBADMIN';
 
-    // GUARDAR EN BITÁCORA
     await supabase.from('registros_diarios').insert([{
       casino_id: activeInputId,
       nombre_casino: casinoActual.nombre,
@@ -345,7 +349,7 @@ export default function DashboardApp() {
     );
     await Promise.all(resetPromises);
 
-    alert(`Mes de ${mesACerrar} cerrado exitosamente. Datos guardados en el historial y valores reiniciados a $0.`);
+    alert(`Mes de ${mesACerrar} cerrado exitosamente.`);
     setShowCloseMonthModal(false);
     setDiaActual(1);
     fetchSupabaseData(); 
@@ -363,7 +367,7 @@ export default function DashboardApp() {
     if (errorHistorial) {
       alert("Error al guardar historial: " + errorHistorial.message);
     } else {
-      alert(`Corte parcial guardado exitosamente en el historial como:\n"${nombreCorte}"\n\nLos acumulados de los locales continúan intactos.`);
+      alert(`Corte parcial guardado exitosamente en el historial como:\n"${nombreCorte}"`);
       if (configTab === 'historial') cargarHistorial();
     }
   };
@@ -377,14 +381,12 @@ export default function DashboardApp() {
     if (newSubCasinos.length === 0) return alert("Selecciona al menos un local.");
     
     const newSub = { pin: newSubPin, casinos: newSubCasinos };
-    
     const { data, error } = await supabase.from('subadmins').insert([newSub]).select();
     
     if (!error && data) {
       setSubAdmins([...subAdmins, data[0]]);
     } else {
-      const newId = Date.now();
-      setSubAdmins([...subAdmins, { id: newId, pin: newSubPin, casinos: newSubCasinos }]);
+      setSubAdmins([...subAdmins, { id: Date.now(), pin: newSubPin, casinos: newSubCasinos }]);
     }
     
     setNewSubPin('');
@@ -440,7 +442,6 @@ export default function DashboardApp() {
     });
 
     const listaFinal: Casino[] = [];
-
     Object.keys(gruposPorPin).forEach(pin => {
       const grupo = gruposPorPin[pin];
       if (grupo.length > 1) {
@@ -463,7 +464,6 @@ export default function DashboardApp() {
       }
       listaFinal.push(...grupo);
     });
-
     return listaFinal;
   };
 
@@ -493,8 +493,7 @@ export default function DashboardApp() {
   const totalesSociedades = calcularTotalesBase(listaTodosLocales.filter(c => c.categoria === 'SOCIEDADES'));
 
   const porcentajeGlobalUtilidad = totalesGenerales.metaUtilidad > 0 ? (totalesGenerales.utilidadReal / totalesGenerales.metaUtilidad) * 100 : 0;
-  const porcentajeTiempo = Math.round((diaActual / 30) * 100);
-
+  
   const exportarCSV = () => {
     let csv = "Local,Meta Ventas,Ventas Reales,Meta Utilidad,Utilidad Real,Falta Para Cumplir %,Rendimiento Diario %,Fecha Cierre\n";
     localesAMostrar.filter(c => !c.isConsolidado).forEach(c => {
@@ -511,11 +510,9 @@ export default function DashboardApp() {
   const exportarCSVHistorial = (registro: HistorialRegistro) => {
     let csv = "Local,Meta Ventas,Ventas Reales,Meta Utilidad,Utilidad Real,Ultima Fecha Turno\n";
     const datosArray = typeof registro.datos_json === 'string' ? JSON.parse(registro.datos_json) : registro.datos_json;
-    
     datosArray.forEach((c: any) => {
       csv += `${c.nombre || 'N/A'},${c.metaMensual || 0},${c.ventasAcumuladas || 0},${c.metaUtilidad || 0},${c.utilidad || 0},${c.fecha || 'N/A'}\n`;
     });
-
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -523,9 +520,7 @@ export default function DashboardApp() {
     link.click();
   };
 
-  // --- LÓGICA DE AUDITORÍA ---
   const fechasDisponibles = Array.from(new Set(bitacora.map(b => new Date(b.fecha_registro).toLocaleDateString('es-CO'))));
-  
   const datosAuditoria = bitacora.filter(b => {
     if (auditoriaMode === 'FECHA') return new Date(b.fecha_registro).toLocaleDateString('es-CO') === auditoriaFecha;
     if (auditoriaMode === 'LOCAL') return auditoriaLocalId === 'TODOS' ? true : b.casino_id === auditoriaLocalId;
@@ -543,9 +538,7 @@ export default function DashboardApp() {
       const d = new Date(r.fecha_registro);
       csv += `${d.toLocaleDateString('es-CO')},${d.toLocaleTimeString('es-CO')},${r.nombre_casino},${r.ventas_ingresadas},${r.utilidad_ingresada},${r.usuario_pin}\n`;
     });
-    
     csv += `\nTOTALES,-,-,${totalesAuditoria.ventas},${totalesAuditoria.utilidad},-\n`;
-
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -741,6 +734,10 @@ export default function DashboardApp() {
   const abonoVentas = parseFloat(inputs[activeInputId!]?.ventas || '0');
   const abonoUtilidad = parseFloat(inputs[activeInputId!]?.utilidad || '0');
 
+  // LOS DÍAS EXACTOS DEL MES EN CURSO PARA DIBUJAR LAS LÍNEAS DE TIEMPO
+  const diasMesActual = getDaysInCurrentMonth();
+  const porcentajeTiempo = Math.round((diaActual / diasMesActual) * 100);
+
   return (
     <div className="min-h-screen bg-gray-900 text-white pb-20 p-4 md:p-8">
       {showInstallModal && <InstallModal />}
@@ -748,9 +745,7 @@ export default function DashboardApp() {
       {/* MODAL GRÁFICA INDIVIDUAL */}
       {activeGraphCasino && (
         <div className="fixed inset-0 z-[150] flex flex-col p-4 md:p-8 animate-in fade-in zoom-in duration-300">
-           
            <div className={`absolute inset-0 ${activeGraphCasino.bg} opacity-90 backdrop-blur-xl transition-colors duration-500`}></div>
-           
            <div className="relative z-10 flex flex-col h-full">
                <div className="flex justify-between items-center border-b border-white/20 pb-4 mb-4">
                   <div>
@@ -763,43 +758,29 @@ export default function DashboardApp() {
                </div>
                
                <div className="flex justify-center gap-8 md:gap-24 items-end mt-4 h-full pb-10">
-                  
-                  {/* Barra Izquierda META (Siempre Verde Oscuro) */}
                   <div className="flex flex-col items-center">
                      <div className="text-center mb-4">
                         <p className="text-[10px] md:text-sm text-white/60 font-bold uppercase tracking-widest leading-tight">Meta de<br/>Utilidad</p>
                         <p className="text-lg md:text-3xl font-black text-white">{formatoPesos(activeGraphCasino.metaUtilidad)}</p>
                      </div>
                      <div className="w-16 md:w-24 h-[40vh] md:h-[50vh] bg-black/40 rounded-t-xl border border-white/20 border-b-0 relative shadow-2xl">
-                        {/* SIEMPRE VERDE OSCURO */}
                         <div className="absolute bottom-0 w-full h-full rounded-t-xl shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)]" 
-                             style={{ background: 'linear-gradient(to top, #022c22, #064e3b)' }}>
-                        </div>
+                             style={{ background: 'linear-gradient(to top, #022c22, #064e3b)' }}></div>
                      </div>
                   </div>
 
-                  {/* Barra Derecha ACUMULADO REAL */}
                   <div className="flex flex-col items-center">
                      <div className="text-center mb-4">
                         <p className="text-[10px] md:text-sm text-blue-300 font-bold uppercase tracking-widest leading-tight">Total<br/>Acumulado</p>
                         <p className="text-lg md:text-3xl font-black text-blue-300">{formatoPesos(activeGraphCasino.utilidad)}</p>
                      </div>
                      <div className="w-16 md:w-24 h-[40vh] md:h-[50vh] bg-black/40 rounded-t-xl border border-white/20 border-b-0 relative shadow-2xl">
-                        
-                        {/* MARCADOR DÍA */}
-                        <div className="absolute left-[-55px] md:left-[-75px] flex items-center gap-1 z-20" style={{ bottom: `${Math.min((diaActual / 30) * 100, 100)}%` }}>
+                        <div className="absolute left-[-55px] md:left-[-75px] flex items-center gap-1 z-20" style={{ bottom: `${Math.min((diaActual / diasMesActual) * 100, 100)}%` }}>
                            <span className="text-[10px] md:text-sm text-white font-bold">Día {diaActual}</span>
                            <div className="w-4 h-px bg-white"></div>
                         </div>
-
-                        {/* BARRA LLENADO */}
                         <div className="absolute bottom-0 w-full rounded-t-xl transition-all duration-1000 flex justify-center shadow-[inset_-5px_0_15px_rgba(0,0,0,0.6)]"
-                             style={{ 
-                               height: `${Math.min(activeGraphCasino.porcentajeMensual, 100)}%`,
-                               background: activeGraphCasino.modalBarColor
-                             }}>
-                           
-                           {/* PORCENTAJE */}
+                             style={{ height: `${Math.min(activeGraphCasino.porcentajeMensual, 100)}%`, background: activeGraphCasino.modalBarColor }}>
                            <div className="absolute -top-6 w-full text-center">
                               <span className={`text-[11px] md:text-sm font-black text-white drop-shadow-md`}>{activeGraphCasino.porcentajeMensual.toFixed(1)}%</span>
                            </div>
@@ -808,18 +789,15 @@ export default function DashboardApp() {
                   </div>
                </div>
 
-               {/* RECUADRO MOTIVACIONAL */}
                <div className="mb-4 w-full max-w-xl mx-auto border border-white/30 rounded-xl p-4 bg-black/30 backdrop-blur-md shadow-lg text-center">
                   <p className={`text-sm md:text-base font-serif italic font-light tracking-wide ${activeGraphCasino.color}`}>
                      {activeGraphCasino.mensaje}
                   </p>
                </div>
-
            </div>
         </div>
       )}
 
-      {/* CONFIRMAR INGRESO */}
       {showConfirmModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4">
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-600 w-full max-w-sm text-center">
@@ -839,7 +817,6 @@ export default function DashboardApp() {
         </div>
       )}
 
-      {/* CIERRE DE MES */}
       {showCloseMonthModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 p-6 rounded-xl border border-red-500 w-full max-w-sm text-center shadow-[0_0_20px_rgba(239,68,68,0.5)]">
@@ -1204,7 +1181,7 @@ export default function DashboardApp() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-12">
         {localesAMostrar.map(casino => {
           const data = evaluarCasino(casino);
-          const porcentajeTiempo = Math.round((diaActual / 30) * 100);
+          const porcentajeTiempo = Math.round((diaActual / diasMesActual) * 100);
           const rentabilidad = data.ventasAcumuladas > 0 ? (data.utilidad / data.ventasAcumuladas) * 100 : 0;
 
           return (
@@ -1258,7 +1235,7 @@ export default function DashboardApp() {
                   <div className="h-2 bg-gray-900 rounded-full relative mb-5">
                      <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
                        <span className="text-emerald-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-emerald-500/30 whitespace-nowrap shadow-lg">
-                         Logro Ventas: {data.porcentajeVentas.toFixed(1)}%
+                         Tiempo: {porcentajeTiempo}% | Día {diaActual}
                        </span>
                        <div className="w-1 h-5 bg-emerald-500 rounded"></div>
                      </div>
@@ -1286,22 +1263,29 @@ export default function DashboardApp() {
                     <span className="text-gray-400 text-right pb-1">Falta cumplir: <span className={`font-bold text-lg ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span></span>
                   </div>
 
-                  {/* LA BARRA DE UTILIDAD CON EL NUEVO TEXTO DEBAJO ANCLADO A ELLA */}
                   <div className="h-2 bg-gray-900 rounded-full relative mb-12">
+                    
+                    {/* BANDERITA LÍNEA VERTICAL CORREGIDA A TIEMPO */}
                     <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
                       <span className="text-blue-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-blue-500/30 whitespace-nowrap shadow-lg">
-                        Logro Utilidad: {data.porcentajeMensual.toFixed(1)}% | Día {diaActual}
+                        Tiempo: {porcentajeTiempo}% | Día {diaActual}
                       </span>
                       <div className="w-1 h-5 bg-blue-500 rounded"></div>
                     </div>
+                    
                     <div className={`h-full ${data.barColor} transition-all duration-1000 rounded-full relative`} style={{ width: `${Math.min(data.porcentajeMensual, 100)}%` }}>
-                       {/* TEXTO CENTRADO CON RESPECTO A LA LÍNEA DE COLOR */}
-                       <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 text-center w-max z-20">
+                       
+                       <div className="absolute top-full mt-2 w-max z-20"
+                            style={{ 
+                               left: `${Math.max(15, data.porcentajeMensual / 2)}%`, 
+                               transform: 'translateX(-50%)' 
+                            }}>
                           <p className={`text-sm font-black tracking-wide ${data.color}`}>{data.porcentajeMensual.toFixed(1)}% Real</p>
                           <p className={`text-[11px] font-bold ${data.color}`}>
                              {data.utilidad < data.promedioEsperado ? '-' : '+'}{formatoPesos(Math.abs(data.promedioEsperado - data.utilidad))}
                           </p>
                        </div>
+
                     </div>
                   </div>
                 </div>
