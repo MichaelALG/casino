@@ -2,13 +2,12 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.9.2 (RESTAURACIÓN TOTAL SEGURA)
+// VERSIÓN: v1.9.3 (AJUSTE VISUAL PSICOLÓGICO)
 // FECHA: 20 de Marzo de 2026
 // DESCRIPCIÓN DE CAMBIOS:
-// - RESTAURADO: Todo el sistema de la versión 1.8.1 intacto (1200+ líneas).
-// - NUEVO: Agregada con precisión la pestaña "Auditoría Diaria" como 6ta 
-//   opción en el panel de configuración.
-// - NUEVO: Sistema de Bitácora que guarda cada ingreso en registros_diarios.
+// - NUEVO: Se agregó debajo de la barra de Utilidad el % Real y la diferencia 
+//   monetaria exacta frente a lo que "Debería llevar" para crear urgencia.
+// - Todo el resto del código y módulos de la v1.9.2 permanecen INTACTOS.
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -946,15 +945,12 @@ export default function DashboardApp() {
                 <X size={16} /> Cerrar Config
               </button>
               
-              {/* ¡AQUÍ ESTÁN LOS 6 BOTONES INTACTOS! */}
               <div className="flex gap-2 mb-6 border-b border-gray-700 pb-2 overflow-x-auto">
                  <button onClick={() => setConfigTab('metas')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap ${configTab === 'metas' ? 'bg-emerald-900/50 text-emerald-400 border-b-2 border-emerald-500' : 'text-gray-400 hover:text-white'}`}><Sigma size={16}/> Metas y Locales</button>
                  <button onClick={() => setConfigTab('mensajes')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap ${configTab === 'mensajes' ? 'bg-yellow-900/50 text-yellow-400 border-b-2 border-yellow-500' : 'text-gray-400 hover:text-white'}`}><MessageSquareText size={16}/> Motivación y Semáforo</button>
                  <button onClick={() => setConfigTab('subadmins')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap ${configTab === 'subadmins' ? 'bg-purple-900/50 text-purple-400 border-b-2 border-purple-500' : 'text-gray-400 hover:text-white'}`}><Users size={16}/> Sub-Administradores</button>
                  <button onClick={() => setConfigTab('sistema')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap ${configTab === 'sistema' ? 'bg-blue-900/50 text-blue-400 border-b-2 border-blue-500' : 'text-gray-400 hover:text-white'}`}><KeyRound size={16}/> Sistema y Cierre</button>
                  <button onClick={() => setConfigTab('historial')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap ${configTab === 'historial' ? 'bg-indigo-900/50 text-indigo-400 border-b-2 border-indigo-500' : 'text-gray-400 hover:text-white'}`}><Archive size={16}/> Historial DB</button>
-                 
-                 {/* EL NUEVO BOTÓN DE AUDITORÍA */}
                  <button onClick={() => setConfigTab('auditoria')} className={`px-4 py-2 rounded-t-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap ${configTab === 'auditoria' ? 'bg-emerald-600/50 text-emerald-300 border-b-2 border-emerald-500' : 'text-gray-400 hover:text-white'}`}><ListChecks size={16}/> Auditoría Diaria</button>
               </div>
 
@@ -1116,7 +1112,6 @@ export default function DashboardApp() {
                 </div>
               )}
 
-              {/* LA PESTAÑA NUEVA: AUDITORÍA (PERFECTAMENTE INTEGRADA) */}
               {configTab === 'auditoria' && (
                 <div className="space-y-6">
                    <div className="flex gap-4 border-b border-gray-700 pb-4">
@@ -1291,7 +1286,8 @@ export default function DashboardApp() {
                     <span className="text-gray-400 text-right pb-1">Falta cumplir: <span className={`font-bold text-lg ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span></span>
                   </div>
 
-                  <div className="h-2 bg-gray-900 rounded-full relative mb-6">
+                  {/* LA BARRA DE UTILIDAD CON EL NUEVO TEXTO DEBAJO */}
+                  <div className="h-2 bg-gray-900 rounded-full relative mb-2">
                     <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
                       <span className="text-blue-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-blue-500/30 whitespace-nowrap shadow-lg">
                         Logro Utilidad: {data.porcentajeMensual.toFixed(1)}% | Día {diaActual}
@@ -1299,6 +1295,14 @@ export default function DashboardApp() {
                       <div className="w-1 h-5 bg-blue-500 rounded"></div>
                     </div>
                     <div className={`h-full ${data.barColor} transition-all duration-1000 rounded-full`} style={{ width: `${Math.min(data.porcentajeMensual, 100)}%` }}></div>
+                  </div>
+                  
+                  {/* AQUÍ ESTÁ EL CÓDIGO NUEVO (CENTRADITO Y CON EL MISMO COLOR) */}
+                  <div className="text-center mb-6">
+                     <p className={`text-sm font-black tracking-wide ${data.color}`}>{data.porcentajeMensual.toFixed(1)}% Real</p>
+                     <p className={`text-xs font-bold ${data.color}`}>
+                        {data.utilidad < data.promedioEsperado ? '-' : '+'}{formatoPesos(Math.abs(data.promedioEsperado - data.utilidad))}
+                     </p>
                   </div>
                 </div>
 
