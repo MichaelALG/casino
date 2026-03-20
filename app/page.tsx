@@ -2,13 +2,14 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.9.6 (AJUSTE TEXTOS TIEMPO Y MATEMÁTICA)
+// VERSIÓN: v1.9.7 (AJUSTES VISUALES ALINEACIÓN Y COLORES)
 // FECHA: 20 de Marzo de 2026
 // DESCRIPCIÓN DE CAMBIOS:
-// - CORRECCIÓN: La banderita de la línea vertical ahora muestra el % de 
-//   Tiempo transcurrido del mes y no el % de utilidad.
-// - MATEMÁTICA: El "Deberías llevar" usa los días exactos del mes actual y 
-//   la diferencia bajo la barra indica cuánto falta/sobra frente a esa meta de hoy.
+// - TEXTO IZQUIERDA: El texto del % Real y la diferencia en pesos ahora está
+//   fijo y justificado a la izquierda debajo de la barra de utilidad.
+// - BARRA DE VENTAS: Se redujo a la mitad el grosor (h-1) y adopta el color dinámico.
+// - TEXTOS: Se eliminó la palabra "Tiempo:" de los marcadores y se cambió 
+//   "Total Acumulado" por "ACUMULADO UTILIDAD".
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -771,7 +772,7 @@ export default function DashboardApp() {
 
                   <div className="flex flex-col items-center">
                      <div className="text-center mb-4">
-                        <p className="text-[10px] md:text-sm text-blue-300 font-bold uppercase tracking-widest leading-tight">Total<br/>Acumulado</p>
+                        <p className="text-[10px] md:text-sm text-blue-300 font-bold uppercase tracking-widest leading-tight">Acumulado<br/>Utilidad</p>
                         <p className="text-lg md:text-3xl font-black text-blue-300">{formatoPesos(activeGraphCasino.utilidad)}</p>
                      </div>
                      <div className="w-16 md:w-24 h-[40vh] md:h-[50vh] bg-black/40 rounded-t-xl border border-white/20 border-b-0 relative shadow-2xl">
@@ -1232,14 +1233,15 @@ export default function DashboardApp() {
                     <span>Falta para ventas: <span className={`font-bold text-lg ${data.faltanteVentas <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteVentas))}</span></span>
                   </div>
                   
-                  <div className="h-2 bg-gray-900 rounded-full relative mb-5">
+                  {/* BARRA DE VENTAS (h-1 y adopta color dinámico data.barColor) */}
+                  <div className="h-1 bg-gray-900 rounded-full relative mb-5">
                      <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
-                       <span className="text-emerald-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-emerald-500/30 whitespace-nowrap shadow-lg">
-                         Tiempo: {porcentajeTiempo}% | Día {diaActual}
+                       <span className={`${data.color} text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-gray-600 whitespace-nowrap shadow-lg`}>
+                         {porcentajeTiempo}% | Día {diaActual}
                        </span>
-                       <div className="w-1 h-5 bg-emerald-500 rounded"></div>
+                       <div className={`w-1 h-4 ${data.barColor} rounded`}></div>
                      </div>
-                     <div className="h-full bg-emerald-500 transition-all duration-1000 rounded-full" style={{ width: `${Math.min(data.porcentajeVentas, 100)}%` }}></div>
+                     <div className={`h-full ${data.barColor} transition-all duration-1000 rounded-full`} style={{ width: `${Math.min(data.porcentajeVentas, 100)}%` }}></div>
                   </div>
 
                   <div className="border-t border-gray-700 my-4"></div>
@@ -1250,7 +1252,7 @@ export default function DashboardApp() {
                       <p className="font-bold text-blue-400">{formatoPesos(data.metaUtilidad)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-gray-400 text-[11px] uppercase">Total Acumulado</p>
+                      <p className="text-gray-400 text-[11px] uppercase">Acumulado Utilidad</p>
                       <p className="font-bold text-white text-lg">{formatoPesos(data.utilidad)}</p>
                     </div>
                   </div>
@@ -1264,22 +1266,17 @@ export default function DashboardApp() {
                   </div>
 
                   <div className="h-2 bg-gray-900 rounded-full relative mb-12">
-                    
-                    {/* BANDERITA LÍNEA VERTICAL CORREGIDA A TIEMPO */}
                     <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
                       <span className="text-blue-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-blue-500/30 whitespace-nowrap shadow-lg">
-                        Tiempo: {porcentajeTiempo}% | Día {diaActual}
+                        {porcentajeTiempo}% | Día {diaActual}
                       </span>
                       <div className="w-1 h-5 bg-blue-500 rounded"></div>
                     </div>
                     
                     <div className={`h-full ${data.barColor} transition-all duration-1000 rounded-full relative`} style={{ width: `${Math.min(data.porcentajeMensual, 100)}%` }}>
                        
-                       <div className="absolute top-full mt-2 w-max z-20"
-                            style={{ 
-                               left: `${Math.max(15, data.porcentajeMensual / 2)}%`, 
-                               transform: 'translateX(-50%)' 
-                            }}>
+                       {/* TEXTO INFERIOR FIJO A LA IZQUIERDA (left-0 y text-left) */}
+                       <div className="absolute top-full mt-2 w-max z-20 left-0 text-left">
                           <p className={`text-sm font-black tracking-wide ${data.color}`}>{data.porcentajeMensual.toFixed(1)}% Real</p>
                           <p className={`text-[11px] font-bold ${data.color}`}>
                              {data.utilidad < data.promedioEsperado ? '-' : '+'}{formatoPesos(Math.abs(data.promedioEsperado - data.utilidad))}
