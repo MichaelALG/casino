@@ -2,12 +2,12 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.9.3 (AJUSTE VISUAL PSICOLÓGICO)
+// VERSIÓN: v1.9.4 (AJUSTE VISUAL CENTRADO DINÁMICO)
 // FECHA: 20 de Marzo de 2026
 // DESCRIPCIÓN DE CAMBIOS:
-// - NUEVO: Se agregó debajo de la barra de Utilidad el % Real y la diferencia 
-//   monetaria exacta frente a lo que "Debería llevar" para crear urgencia.
-// - Todo el resto del código y módulos de la v1.9.2 permanecen INTACTOS.
+// - NUEVO: El % Real y la diferencia monetaria ahora están anclados y 
+//   centrados exclusivamente a lo ancho de la barra de progreso a color.
+// - Todo el resto del sistema de la v1.9.2 (Auditoría, Reportes) INTACTO.
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -1286,27 +1286,27 @@ export default function DashboardApp() {
                     <span className="text-gray-400 text-right pb-1">Falta cumplir: <span className={`font-bold text-lg ${data.faltanteParaCumplir <= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatoPesos(Math.max(0, data.faltanteParaCumplir))}</span></span>
                   </div>
 
-                  {/* LA BARRA DE UTILIDAD CON EL NUEVO TEXTO DEBAJO */}
-                  <div className="h-2 bg-gray-900 rounded-full relative mb-2">
+                  {/* LA BARRA DE UTILIDAD CON EL NUEVO TEXTO DEBAJO ANCLADO A ELLA */}
+                  <div className="h-2 bg-gray-900 rounded-full relative mb-12">
                     <div className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex flex-col items-center z-10" style={{ left: `${porcentajeTiempo}%` }}>
                       <span className="text-blue-400 text-[10px] font-bold absolute bottom-full mb-1 bg-gray-900/80 px-1 rounded border border-blue-500/30 whitespace-nowrap shadow-lg">
                         Logro Utilidad: {data.porcentajeMensual.toFixed(1)}% | Día {diaActual}
                       </span>
                       <div className="w-1 h-5 bg-blue-500 rounded"></div>
                     </div>
-                    <div className={`h-full ${data.barColor} transition-all duration-1000 rounded-full`} style={{ width: `${Math.min(data.porcentajeMensual, 100)}%` }}></div>
-                  </div>
-                  
-                  {/* AQUÍ ESTÁ EL CÓDIGO NUEVO (CENTRADITO Y CON EL MISMO COLOR) */}
-                  <div className="text-center mb-6">
-                     <p className={`text-sm font-black tracking-wide ${data.color}`}>{data.porcentajeMensual.toFixed(1)}% Real</p>
-                     <p className={`text-xs font-bold ${data.color}`}>
-                        {data.utilidad < data.promedioEsperado ? '-' : '+'}{formatoPesos(Math.abs(data.promedioEsperado - data.utilidad))}
-                     </p>
+                    <div className={`h-full ${data.barColor} transition-all duration-1000 rounded-full relative`} style={{ width: `${Math.min(data.porcentajeMensual, 100)}%` }}>
+                       {/* TEXTO CENTRADO CON RESPECTO A LA LÍNEA DE COLOR */}
+                       <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 text-center w-max z-20">
+                          <p className={`text-sm font-black tracking-wide ${data.color}`}>{data.porcentajeMensual.toFixed(1)}% Real</p>
+                          <p className={`text-[11px] font-bold ${data.color}`}>
+                             {data.utilidad < data.promedioEsperado ? '-' : '+'}{formatoPesos(Math.abs(data.promedioEsperado - data.utilidad))}
+                          </p>
+                       </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-2">
                   <div className="flex items-center justify-center p-3 rounded-lg mb-4 bg-gray-900 border border-gray-700">
                     <span className={`text-sm font-serif italic font-light ${data.color} text-center`}>{data.mensaje}</span>
                   </div>
