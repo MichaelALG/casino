@@ -2,11 +2,11 @@
 /* eslint-disable @next/next/no-img-element */
 
 // ============================================================================
-// VERSIÓN: v1.9.9 (ACLARACIÓN FECHA DE ÚLTIMO REGISTRO)
+// VERSIÓN: v1.10.1 (AJUSTE QUIRÚRGICO HORA DE CORTE)
 // FECHA: 20 de Marzo de 2026
 // DESCRIPCIÓN DE CAMBIOS:
-// - TEXTO FECHA: Se agregó el prefijo "Últ. registro: " a la fecha de la tarjeta
-//   para evitar confusiones con la fecha actual del sistema.
+// - MODIFICACIÓN: Se amplió el horario del "Día Lógico". Los registros creados 
+//   antes de las 12:00 PM (mediodía) se asignan automáticamente al día anterior.
 // ============================================================================
 
 import { useState, useEffect } from 'react';
@@ -123,7 +123,7 @@ export default function DashboardApp() {
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showCloseMonthModal, setShowCloseMonthModal] = useState(false);
-  const [mesACerrar, setMesACerrar] = useState(new Date().toLocaleString('es-CO', { month: 'long' }).toUpperCase());
+  const [mesACerrar, setMesACerrar] = useState('');
   
   const [activeGraphCasino, setActiveGraphCasino] = useState<Casino & ReturnType<typeof evaluarCasino> | null>(null);
 
@@ -174,8 +174,17 @@ export default function DashboardApp() {
 
   useEffect(() => {
     setIsMounted(true);
-    const today = new Date().getDate();
-    setDiaActual(today);
+    
+    // --- LÓGICA DE DÍA LÓGICO DE NEGOCIO ---
+    const today = new Date();
+    const logicalDate = new Date(today);
+    // Si son antes de las 12 PM (mediodía), consideramos que es la jornada de ayer
+    if (today.getHours() < 12) {
+      logicalDate.setDate(logicalDate.getDate() - 1);
+    }
+    
+    setDiaActual(logicalDate.getDate());
+    setMesACerrar(logicalDate.toLocaleString('es-CO', { month: 'long' }).toUpperCase());
     
     fetchSupabaseData();
 
@@ -297,10 +306,20 @@ export default function DashboardApp() {
     if (!activeInputId) return;
     const ventasToAdd = parseFloat(inputs[activeInputId]?.ventas || '0');
     const utilidadToAdd = parseFloat(inputs[activeInputId]?.utilidad || '0');
-    const now = new Date();
-    const fechaStr = now.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    
     const casinoActual = casinos.find(c => c.id === activeInputId);
     if (!casinoActual) return;
+
+    // --- CÁLCULO DE FECHA LÓGICA DE TURNO ---
+    const now = new Date();
+    const logicalDate = new Date(now);
+    if (now.getHours() < 12) {
+       logicalDate.setDate(logicalDate.getDate() - 1);
+    }
+    
+    const diaStr = logicalDate.toLocaleString('es-CO', { day: '2-digit', month: 'short' });
+    const horaStr = now.toLocaleString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    const fechaStr = `${diaStr}, ${horaStr}`;
 
     const nuevasVentas = Number(casinoActual.ventasAcumuladas || 0) + ventasToAdd;
     const nuevaUtilidad = Number(casinoActual.utilidad || 0) + utilidadToAdd;
@@ -310,6 +329,7 @@ export default function DashboardApp() {
     if (userRole === 'user') pinUsuarioStr = loggedInUserPin;
     if (userRole === 'subadmin') pinUsuarioStr = 'SUBADMIN';
 
+    // En base de datos se guarda con la hora actual NOW() para auditoría limpia
     await supabase.from('registros_diarios').insert([{
       casino_id: activeInputId,
       nombre_casino: casinoActual.nombre,
@@ -803,7 +823,17 @@ export default function DashboardApp() {
                <p className="text-emerald-400 font-bold mb-1">Ventas: {formatoPesos(abonoVentas)}</p>
                <p className="text-blue-400 font-bold">Utilidad: {formatoPesos(abonoUtilidad)}</p>
              </div>
-             <p className="text-xs text-gray-500 mb-6 font-bold">Esta acción generará un registro en la auditoría diaria.</p>
+             
+             {/* ALERTA VISUAL DE DÍA LÓGICO */}
+             {new Date().getHours() < 12 ? (
+               <div className="bg-blue-900/30 border border-blue-500/50 p-2 rounded mb-6">
+                 <p className="text-[10px] text-blue-300 font-bold">🌙 Turno de madrugada detectado.</p>
+                 <p className="text-[10px] text-gray-400">Este valor se asignará a la jornada del día de ayer.</p>
+               </div>
+             ) : (
+               <p className="text-xs text-gray-500 mb-6 font-bold">Esta acción generará un registro en la auditoría diaria.</p>
+             )}
+
              <div className="flex gap-4">
                <button onClick={() => setShowConfirmModal(false)} className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded font-bold">Cancelar</button>
                <button onClick={confirmEntry} className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-bold">Sí, Sumar</button>
@@ -859,7 +889,7 @@ export default function DashboardApp() {
 
           <div className="flex items-center gap-2 text-xs bg-gray-800 p-2 rounded border border-gray-700">
             <Calendar size={14} className="text-gray-400"/>
-            <span>Día:</span>
+            <span>Día Operativo:</span>
             <input type="number" min="1" max="31" value={diaActual} onChange={(e) => setDiaActual(Number(e.target.value))} className="w-10 bg-gray-700 text-center rounded text-white text-xs px-1" />
           </div>
         </div>
@@ -1195,7 +1225,6 @@ export default function DashboardApp() {
 
                 <div className={`flex justify-between items-center ${!data.isConsolidado ? 'ml-12' : ''} mr-10`}>
                   <span className="text-[10px] font-bold bg-black/20 px-2 py-1 rounded uppercase tracking-wider">{data.categoria}</span>
-                  {/* AQUÍ ESTÁ EL AJUSTE PARA ACLARAR QUÉ ES ESA FECHA */}
                   <span className="text-[10px] font-bold text-white/70 bg-black/20 px-2 py-1 rounded">Últ. registro: {data.fecha || 'Sin cierres'}</span>
                 </div>
                 
